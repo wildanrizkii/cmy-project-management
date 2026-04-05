@@ -13,13 +13,9 @@ import {
   Users,
   BarChart3,
   AlertCircle,
+  X,
 } from "lucide-react";
-import {
-  formatDate,
-  getStatusColor,
-  getFaseColor,
-  getPriorityColor,
-} from "@/lib/utils";
+import { formatDate, getStatusColor } from "@/lib/utils";
 import {
   BarChart,
   Bar,
@@ -32,8 +28,7 @@ import {
   Pie,
   Cell,
   ResponsiveContainer,
-  LineChart,
-  Line,
+  TooltipProps,
 } from "recharts";
 import { STATUS_LABELS, FASE_LABELS } from "@/types";
 
@@ -45,7 +40,118 @@ const STATUS_COLORS: Record<string, string> = {
   TUNDA: "#f97316",
 };
 
+// ─── Custom Tooltips ──────────────────────────────────────────────────────────
 
+type ProjectRef = { code: string; name: string };
+
+function ProjectListTooltip({
+  active,
+  payload,
+  labelKey,
+  countKey,
+}: TooltipProps<number, string> & { labelKey: string; countKey: string }) {
+  if (!active || !payload?.length) return null;
+  const d = payload[0]?.payload as Record<string, unknown>;
+  const label = d[labelKey] as string;
+  const count = d[countKey] as number;
+  const projects = (d.projects ?? []) as ProjectRef[];
+  if (!count) return null;
+  return (
+    <div className="bg-white border border-gray-200 shadow-xl rounded-xl p-3 text-xs max-w-56">
+      <p className="font-semibold text-gray-900 mb-1.5">
+        {label} — <span className="text-blue-600">{count} proyek</span>
+      </p>
+      <div className="space-y-0.5 max-h-36 overflow-y-auto">
+        {projects.length > 0 ? (
+          projects.map((p) => (
+            <p key={p.code} className="text-gray-600 truncate">
+              <span className="font-mono font-medium text-gray-800">{p.code}</span> {p.name}
+            </p>
+          ))
+        ) : (
+          <p className="text-gray-400 italic">Tidak ada proyek</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function HinanhyoTooltip({ active, payload }: TooltipProps<number, string>) {
+  if (!active || !payload?.length) return null;
+  const d = payload[0]?.payload as {
+    code: string; name: string;
+    DITERIMA: number; DITOLAK: number; PENDING: number; total: number;
+  };
+  return (
+    <div className="bg-white border border-gray-200 shadow-xl rounded-xl p-3 text-xs max-w-52">
+      <p className="font-semibold text-gray-900 mb-1.5 truncate">
+        <span className="font-mono">{d.code}</span> — {d.name}
+      </p>
+      <div className="space-y-1">
+        <p className="flex items-center justify-between gap-4">
+          <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-green-500 inline-block" />Diterima</span>
+          <span className="font-semibold text-green-700">{d.DITERIMA}</span>
+        </p>
+        <p className="flex items-center justify-between gap-4">
+          <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-red-500 inline-block" />Ditolak</span>
+          <span className="font-semibold text-red-700">{d.DITOLAK}</span>
+        </p>
+        <p className="flex items-center justify-between gap-4">
+          <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-yellow-400 inline-block" />Pending</span>
+          <span className="font-semibold text-yellow-700">{d.PENDING}</span>
+        </p>
+        <div className="border-t border-gray-100 pt-1 mt-1">
+          <p className="flex items-center justify-between gap-4">
+            <span className="text-gray-500">Total</span>
+            <span className="font-bold text-gray-800">{d.total}</span>
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StatusPieTooltip({ active, payload }: TooltipProps<number, string>) {
+  if (!active || !payload?.length) return null;
+  const d = payload[0]?.payload as { name: string; value: number; projects: ProjectRef[] };
+  if (!d.value) return null;
+  return (
+    <div className="bg-white border border-gray-200 shadow-xl rounded-xl p-3 text-xs max-w-56">
+      <p className="font-semibold text-gray-900 mb-1.5">
+        {d.name} — <span className="text-blue-600">{d.value} proyek</span>
+      </p>
+      <div className="space-y-0.5 max-h-36 overflow-y-auto">
+        {d.projects?.map((p) => (
+          <p key={p.code} className="text-gray-600 truncate">
+            <span className="font-mono font-medium text-gray-800">{p.code}</span> {p.name}
+          </p>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// Label rendered inside pie segments
+function PieCountLabel({
+  cx, cy, midAngle, innerRadius, outerRadius, value,
+}: {
+  cx: number; cy: number; midAngle: number;
+  innerRadius: number; outerRadius: number; value: number;
+}) {
+  if (!value) return null;
+  const RADIAN = Math.PI / 180;
+  const radius = innerRadius + (outerRadius - innerRadius) * 0.55;
+  const x = cx + radius * Math.cos(-midAngle * RADIAN);
+  const y = cy + radius * Math.sin(-midAngle * RADIAN);
+  return (
+    <text x={x} y={y} fill="white" textAnchor="middle" dominantBaseline="central"
+      fontSize={13} fontWeight="bold">
+      {value}
+    </text>
+  );
+}
+
+// ─── Clock hook ───────────────────────────────────────────────────────────────
 function useRealtimeClock() {
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
@@ -55,14 +161,27 @@ function useRealtimeClock() {
   return now;
 }
 
+// ─── Main Page ────────────────────────────────────────────────────────────────
 export default function DashboardPage() {
   const clock = useRealtimeClock();
   const [monitorPage, setMonitorPage] = useState(1);
   const monitorPerPage = 8;
 
+  const [filterPicId, setFilterPicId] = useState("");
+  const [filterCustomer, setFilterCustomer] = useState("");
+  const [filterProjectId, setFilterProjectId] = useState("");
+
+  const hasFilter = filterPicId || filterCustomer || filterProjectId;
+
   const { data, isLoading } = useQuery({
-    queryKey: ["dashboard"],
-    queryFn: () => apiFetch("/api/dashboard").then((r) => r.json()),
+    queryKey: ["dashboard", filterPicId, filterCustomer, filterProjectId],
+    queryFn: () => {
+      const params = new URLSearchParams();
+      if (filterPicId) params.set("picId", filterPicId);
+      if (filterCustomer) params.set("customer", filterCustomer);
+      if (filterProjectId) params.set("projectId", filterProjectId);
+      return apiFetch(`/api/dashboard?${params}`).then((r) => r.json());
+    },
     refetchInterval: 30000,
   });
 
@@ -80,93 +199,43 @@ export default function DashboardPage() {
   const kpi = data?.kpi ?? {};
   const charts = data?.charts ?? {};
   const taskMonitoring = data?.taskMonitoring ?? [];
+  const filterOptions = data?.filterOptions ?? { pics: [], customers: [], projects: [] };
 
+  // ─── KPI cards ──────────────────────────────────────────────────────────────
   const kpiCards = [
-    {
-      label: "Proyek Aktif",
-      value: kpi.totalAktif ?? 0,
-      icon: Activity,
-      color: "bg-blue-500",
-      bg: "bg-blue-50",
-      text: "text-blue-700",
-    },
-    {
-      label: "Proyek Terlambat",
-      value: kpi.totalTerlambat ?? 0,
-      icon: AlertTriangle,
-      color: "bg-red-500",
-      bg: "bg-red-50",
-      text: "text-red-700",
-    },
-    {
-      label: "Hinanhyo Pending",
-      value: kpi.totalHinanhyoPending ?? 0,
-      icon: AlertCircle,
-      color: "bg-orange-500",
-      bg: "bg-orange-50",
-      text: "text-orange-700",
-    },
-    {
-      label: "Rata-rata Progress",
-      value: `${kpi.rataRataProgress ?? 0}%`,
-      icon: TrendingUp,
-      color: "bg-green-500",
-      bg: "bg-green-50",
-      text: "text-green-700",
-    },
-    {
-      label: "Selesai Bulan Ini",
-      value: kpi.selesaiBulanIni ?? 0,
-      icon: CheckCircle2,
-      color: "bg-emerald-500",
-      bg: "bg-emerald-50",
-      text: "text-emerald-700",
-    },
-    {
-      label: "Deadline 7 Hari",
-      value: kpi.deadline7Hari ?? 0,
-      icon: Clock,
-      color: "bg-yellow-500",
-      bg: "bg-yellow-50",
-      text: "text-yellow-700",
-    },
+    { label: "Proyek Aktif", value: kpi.totalAktif ?? 0, icon: Activity, bg: "bg-blue-50", text: "text-blue-700" },
+    { label: "Proyek Terlambat", value: kpi.totalTerlambat ?? 0, icon: AlertTriangle, bg: "bg-red-50", text: "text-red-700" },
+    { label: "Hinanhyo Pending", value: kpi.totalHinanhyoPending ?? 0, icon: AlertCircle, bg: "bg-orange-50", text: "text-orange-700" },
+    { label: "Rata-rata Progress", value: `${kpi.rataRataProgress ?? 0}%`, icon: TrendingUp, bg: "bg-green-50", text: "text-green-700" },
+    { label: "Selesai Bulan Ini", value: kpi.selesaiBulanIni ?? 0, icon: CheckCircle2, bg: "bg-emerald-50", text: "text-emerald-700" },
+    { label: "Deadline 7 Hari", value: kpi.deadline7Hari ?? 0, icon: Clock, bg: "bg-yellow-50", text: "text-yellow-700" },
   ];
 
+  // ─── Chart data ──────────────────────────────────────────────────────────────
   const statusChartData = (charts.statusDist ?? []).map(
-    (d: { status: string; count: number }) => ({
+    (d: { status: string; count: number; projects: ProjectRef[] }) => ({
       name: STATUS_LABELS[d.status as keyof typeof STATUS_LABELS] ?? d.status,
       value: d.count,
       status: d.status,
+      projects: d.projects,
     }),
   );
 
-  const phaseChartData = Object.entries(charts.phaseAvg ?? {}).map(
-    ([fase, avg]) => ({
-      fase: FASE_LABELS[fase as keyof typeof FASE_LABELS] ?? fase,
-      progress: avg,
+  const phaseChartData = (charts.phaseDist ?? []).map(
+    (d: { faseKey: string; count: number; projects: ProjectRef[] }) => ({
+      fase: FASE_LABELS[d.faseKey as keyof typeof FASE_LABELS] ?? d.faseKey,
+      count: d.count,
+      projects: d.projects,
     }),
   );
 
-  const hinanhyoChartData = [
-    {
-      name: "Diterima",
-      value: charts.hinanhyoDist?.DITERIMA ?? 0,
-      fill: "#22c55e",
-    },
-    {
-      name: "Ditolak",
-      value: charts.hinanhyoDist?.DITOLAK ?? 0,
-      fill: "#ef4444",
-    },
-    {
-      name: "Pending",
-      value: charts.hinanhyoDist?.PENDING ?? 0,
-      fill: "#f59e0b",
-    },
-  ];
+  const hinanhyoByProject: {
+    code: string; name: string;
+    DITERIMA: number; DITOLAK: number; PENDING: number; total: number;
+  }[] = charts.hinanhyoByProject ?? [];
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-4 md:p-6 space-y-5">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
@@ -175,132 +244,191 @@ export default function DashboardPage() {
         </div>
         <div className="flex items-center gap-3 bg-white border border-gray-100 shadow-sm rounded-xl px-4 py-2.5 self-start sm:self-auto">
           <Calendar className="w-4 h-4 text-gray-400 shrink-0" />
-          <span className="text-sm text-gray-600">
-            {clock.toLocaleDateString("id-ID", {
-              weekday: "long",
-              day: "numeric",
-              month: "long",
-              year: "numeric",
-            })}
+          <span className="text-sm text-gray-600 hidden sm:block">
+            {clock.toLocaleDateString("id-ID", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
           </span>
-          <span className="text-gray-300 text-sm">|</span>
+          <span className="text-gray-300 text-sm hidden sm:block">|</span>
           <span className="font-mono text-blue-600 font-semibold tabular-nums text-sm tracking-wider">
-            {clock.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", second: "2-digit" }).replace(/\./g, ".")} WIB
+            {clock.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", second: "2-digit" })} WIB
           </span>
+        </div>
+      </div>
+
+      {/* Filter bar */}
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm px-4 py-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider shrink-0">Filter Chart</span>
+          <select
+            value={filterProjectId}
+            onChange={(e) => { setFilterProjectId(e.target.value); setMonitorPage(1); }}
+            className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-700 min-w-40"
+          >
+            <option value="">Semua Proyek</option>
+            {filterOptions.projects.map((p: { id: string; code: string; name: string }) => (
+              <option key={p.id} value={p.id}>{p.code} — {p.name}</option>
+            ))}
+          </select>
+          <select
+            value={filterPicId}
+            onChange={(e) => { setFilterPicId(e.target.value); setMonitorPage(1); }}
+            className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-700 min-w-36"
+          >
+            <option value="">Semua PIC</option>
+            {filterOptions.pics.map((p: { id: string; name: string }) => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </select>
+          <select
+            value={filterCustomer}
+            onChange={(e) => { setFilterCustomer(e.target.value); setMonitorPage(1); }}
+            className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-700 min-w-36"
+          >
+            <option value="">Semua Customer</option>
+            {filterOptions.customers.map((c: string) => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </select>
+          {hasFilter && (
+            <button
+              onClick={() => { setFilterPicId(""); setFilterCustomer(""); setFilterProjectId(""); setMonitorPage(1); }}
+              className="flex items-center gap-1 px-3 py-1.5 text-sm text-gray-500 hover:text-gray-800 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              <X className="w-3.5 h-3.5" />
+              Reset
+            </button>
+          )}
+          {hasFilter && (
+            <span className="text-xs text-blue-600 font-medium bg-blue-50 px-2 py-1 rounded-full">
+              Filter aktif — {taskMonitoring.length} proyek
+            </span>
+          )}
         </div>
       </div>
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
-        {kpiCards.map(({ label, value, icon: Icon, color, bg, text }) => (
-          <div
-            key={label}
-            className="bg-white rounded-xl border border-gray-100 shadow-sm p-4"
-          >
-            <div
-              className={`w-10 h-10 rounded-lg ${bg} flex items-center justify-center mb-3`}
-            >
+        {kpiCards.map(({ label, value, icon: Icon, bg, text }) => (
+          <div key={label} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+            <div className={`w-10 h-10 rounded-lg ${bg} flex items-center justify-center mb-3`}>
               <Icon className={`w-5 h-5 ${text}`} />
             </div>
             <div className={`text-2xl font-bold ${text}`}>{value}</div>
-            <div className="text-xs text-gray-500 mt-0.5 font-medium">
-              {label}
-            </div>
+            <div className="text-xs text-gray-500 mt-0.5 font-medium">{label}</div>
           </div>
         ))}
       </div>
 
+      {/* Charts Row 1: Status + Fase + Hinanhyo */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
 
-      {/* Charts Row 1 */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Donut: Status Proyek */}
+        {/* Chart 1: Distribusi Status — Pie with count labels always visible */}
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
-          <h2 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2">
+          <h2 className="text-sm font-semibold text-gray-900 mb-1 flex items-center gap-2">
             <BarChart3 className="w-4 h-4 text-blue-600" />
             Distribusi Status Proyek
           </h2>
-          <ResponsiveContainer width="100%" height={200}>
-            <PieChart>
-              <Pie
-                data={statusChartData}
-                cx="50%"
-                cy="50%"
-                innerRadius={50}
-                outerRadius={80}
-                dataKey="value"
-                label={({ name, value }) =>
-                  value > 0 ? `${name}: ${value}` : ""
-                }
-                labelLine={false}
-                fontSize={11}
-              >
-                {statusChartData.map((entry: { status: string }, i: number) => (
-                  <Cell
-                    key={i}
-                    fill={STATUS_COLORS[entry.status] ?? "#94a3b8"}
-                  />
+          <p className="text-xs text-gray-400 mb-3">Hover untuk lihat daftar proyek</p>
+          {statusChartData.every((d: { value: number }) => d.value === 0) ? (
+            <div className="h-48 flex items-center justify-center text-gray-400 text-sm">Tidak ada data</div>
+          ) : (
+            <>
+              <ResponsiveContainer width="100%" height={200}>
+                <PieChart>
+                  <Pie
+                    data={statusChartData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={45}
+                    outerRadius={78}
+                    dataKey="value"
+                    labelLine={false}
+                    label={PieCountLabel as never}
+                  >
+                    {statusChartData.map((entry: { status: string }, i: number) => (
+                      <Cell key={i} fill={STATUS_COLORS[entry.status] ?? "#94a3b8"} />
+                    ))}
+                  </Pie>
+                  <Tooltip content={<StatusPieTooltip />} />
+                </PieChart>
+              </ResponsiveContainer>
+              {/* Legend */}
+              <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2 justify-center">
+                {statusChartData.filter((d: { value: number }) => d.value > 0).map((d: { status: string; name: string; value: number }) => (
+                  <span key={d.status} className="flex items-center gap-1 text-xs text-gray-600">
+                    <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: STATUS_COLORS[d.status] }} />
+                    {d.name}
+                  </span>
                 ))}
-              </Pie>
-              <Tooltip />
-            </PieChart>
-          </ResponsiveContainer>
+              </div>
+            </>
+          )}
         </div>
 
-        {/* Bar: Progress per Fase */}
+        {/* Chart 2: Count Proyek per Fase — vertical bar */}
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
-          <h2 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2">
+          <h2 className="text-sm font-semibold text-gray-900 mb-1 flex items-center gap-2">
             <TrendingUp className="w-4 h-4 text-blue-600" />
-            Rata-rata Progress per Fase
+            Jumlah Proyek per Fase
           </h2>
+          <p className="text-xs text-gray-400 mb-3">Hover untuk lihat daftar proyek</p>
           <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={phaseChartData} layout="vertical">
-              <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-              <XAxis
-                type="number"
-                domain={[0, 100]}
-                tickFormatter={(v) => `${v}%`}
-                fontSize={11}
+            <BarChart data={phaseChartData} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} />
+              <XAxis dataKey="fase" fontSize={11} tick={{ fill: "#6b7280" }} />
+              <YAxis allowDecimals={false} fontSize={11} tick={{ fill: "#6b7280" }} />
+              <Tooltip
+                content={(props) => (
+                  <ProjectListTooltip {...props} labelKey="fase" countKey="count" />
+                )}
               />
-              <YAxis type="category" dataKey="fase" width={90} fontSize={11} />
-              <Tooltip formatter={(v) => `${v}%`} />
-              <Bar dataKey="progress" fill="#3b82f6" radius={[0, 4, 4, 0]} />
+              <Bar dataKey="count" name="Proyek" fill="#3b82f6" radius={[4, 4, 0, 0]}
+                label={{ position: "top", fontSize: 11, fontWeight: "bold", fill: "#1d4ed8" }}
+              />
             </BarChart>
           </ResponsiveContainer>
         </div>
 
-        {/* Donut: Hinanhyo/DR */}
+        {/* Chart 3: Hinanhyo & DR — vertical stacked bar per project */}
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
-          <h2 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2">
+          <h2 className="text-sm font-semibold text-gray-900 mb-1 flex items-center gap-2">
             <AlertCircle className="w-4 h-4 text-orange-500" />
             Status Hinanhyo &amp; DR
           </h2>
-          <ResponsiveContainer width="100%" height={200}>
-            <PieChart>
-              <Pie
-                data={hinanhyoChartData}
-                cx="50%"
-                cy="50%"
-                innerRadius={50}
-                outerRadius={80}
-                dataKey="value"
-                label={({ name, value }) =>
-                  value > 0 ? `${name}: ${value}` : ""
-                }
-                labelLine={false}
-                fontSize={11}
-              >
-                {hinanhyoChartData.map((entry, i) => (
-                  <Cell key={i} fill={entry.fill} />
+          <p className="text-xs text-gray-400 mb-3">Hover untuk lihat detail per proyek</p>
+          {hinanhyoByProject.length === 0 ? (
+            <div className="h-48 flex items-center justify-center text-gray-400 text-sm">Tidak ada data Hinanhyo/DR</div>
+          ) : (
+            <>
+              <ResponsiveContainer width="100%" height={200}>
+                <BarChart data={hinanhyoByProject} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                  <XAxis dataKey="code" fontSize={10} tick={{ fill: "#6b7280" }} />
+                  <YAxis allowDecimals={false} fontSize={11} tick={{ fill: "#6b7280" }} />
+                  <Tooltip content={<HinanhyoTooltip />} />
+                  <Bar dataKey="DITERIMA" name="Diterima" stackId="a" fill="#22c55e" />
+                  <Bar dataKey="DITOLAK" name="Ditolak" stackId="a" fill="#ef4444" />
+                  <Bar dataKey="PENDING" name="Pending" stackId="a" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+              <div className="flex gap-3 mt-2 justify-center">
+                {[
+                  { label: "Diterima", color: "#22c55e" },
+                  { label: "Ditolak", color: "#ef4444" },
+                  { label: "Pending", color: "#f59e0b" },
+                ].map((l) => (
+                  <span key={l.label} className="flex items-center gap-1 text-xs text-gray-600">
+                    <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: l.color }} />
+                    {l.label}
+                  </span>
                 ))}
-              </Pie>
-              <Tooltip />
-            </PieChart>
-          </ResponsiveContainer>
+              </div>
+            </>
+          )}
         </div>
       </div>
 
       {/* Charts Row 2: MP & Cycle Time */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         {/* MP Chart */}
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
           <h2 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2">
@@ -314,18 +442,8 @@ export default function DashboardPage() {
               <YAxis fontSize={11} />
               <Tooltip />
               <Legend fontSize={11} />
-              <Bar
-                dataKey="kebutuhan"
-                name="Kebutuhan"
-                fill="#93c5fd"
-                radius={[4, 4, 0, 0]}
-              />
-              <Bar
-                dataKey="aktual"
-                name="Aktual"
-                fill="#3b82f6"
-                radius={[4, 4, 0, 0]}
-              />
+              <Bar dataKey="kebutuhan" name="Kebutuhan" fill="#93c5fd" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="aktual" name="Aktual" fill="#3b82f6" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -361,137 +479,91 @@ export default function DashboardPage() {
       {/* Task Monitoring Table */}
       {(() => {
         const totalMonitorPages = Math.ceil(taskMonitoring.length / monitorPerPage);
-        const paginatedMonitor = taskMonitoring.slice((monitorPage - 1) * monitorPerPage, monitorPage * monitorPerPage);
+        const paginatedMonitor = taskMonitoring.slice(
+          (monitorPage - 1) * monitorPerPage,
+          monitorPage * monitorPerPage,
+        );
         return (
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm">
-        <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Calendar className="w-4 h-4 text-blue-600" />
-            <h2 className="text-sm font-semibold text-gray-900">Task Monitoring</h2>
-            <span className="text-xs text-gray-400">({taskMonitoring.length} proyek)</span>
-          </div>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50">
-              <tr>
-                {[
-                  "Kode",
-                  "Nama Proyek",
-                  "PIC",
-                  "Customer",
-                  "Deadline",
-                  "Sisa/Terlambat",
-                  "Status",
-                  "Progress",
-                ].map((h) => (
-                  <th
-                    key={h}
-                    className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider"
-                  >
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {paginatedMonitor.map(
-                (row: {
-                  code: string;
-                  name: string;
-                  picName: string;
-                  customer: string;
-                  endDate: string;
-                  daysRemaining: number;
-                  status: string;
-                  overallProgress: number;
-                }) => {
-                  const isLate = row.daysRemaining < 0;
-                  const isNear =
-                    row.daysRemaining >= 0 && row.daysRemaining <= 7;
-                  return (
-                    <tr
-                      key={row.code}
-                      className={
-                        isLate ? "bg-red-50" : isNear ? "bg-yellow-50" : ""
-                      }
-                    >
-                      <td className="px-4 py-3 font-mono font-medium text-gray-700">
-                        {row.code}
-                      </td>
-                      <td className="px-4 py-3 font-medium text-gray-900 max-w-45 truncate">
-                        {row.name}
-                      </td>
-                      <td className="px-4 py-3 text-gray-600">{row.picName}</td>
-                      <td className="px-4 py-3 text-gray-600">
-                        {row.customer}
-                      </td>
-                      <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
-                        {formatDate(row.endDate)}
-                      </td>
-                      <td
-                        className={`px-4 py-3 font-semibold whitespace-nowrap ${isLate ? "text-red-600" : isNear ? "text-yellow-600" : "text-gray-600"}`}
-                      >
-                        {isLate
-                          ? `Terlambat ${-row.daysRemaining} hari`
-                          : row.daysRemaining === 0
-                          ? "Hari ini"
-                          : `Sisa ${row.daysRemaining} hari`}
-                      </td>
-                      <td className="px-4 py-3">
-                        <span
-                          className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium border ${getStatusColor(row.status)}`}
-                        >
-                          {STATUS_LABELS[
-                            row.status as keyof typeof STATUS_LABELS
-                          ] ?? row.status}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          <div className="flex-1 h-1.5 bg-gray-200 rounded-full min-w-15">
-                            <div
-                              className="h-1.5 bg-blue-500 rounded-full transition-all"
-                              style={{ width: `${row.overallProgress}%` }}
-                            />
-                          </div>
-                          <span className="text-xs text-gray-600 font-medium">
-                            {row.overallProgress}%
-                          </span>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                },
+          <div className="bg-white rounded-xl border border-gray-100 shadow-sm">
+            <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Calendar className="w-4 h-4 text-blue-600" />
+                <h2 className="text-sm font-semibold text-gray-900">Task Monitoring</h2>
+                <span className="text-xs text-gray-400">({taskMonitoring.length} proyek)</span>
+              </div>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50">
+                  <tr>
+                    {["Kode", "Nama Proyek", "PIC", "Customer", "Deadline", "Sisa/Terlambat", "Status", "Progress"].map((h) => (
+                      <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {paginatedMonitor.map(
+                    (row: {
+                      code: string; name: string; picName: string; customer: string;
+                      endDate: string; daysRemaining: number; status: string; overallProgress: number;
+                    }) => {
+                      const isLate = row.daysRemaining < 0;
+                      const isNear = row.daysRemaining >= 0 && row.daysRemaining <= 7;
+                      return (
+                        <tr key={row.code} className={isLate ? "bg-red-50" : isNear ? "bg-yellow-50" : ""}>
+                          <td className="px-4 py-3 font-mono font-medium text-gray-700 whitespace-nowrap">{row.code}</td>
+                          <td className="px-4 py-3 font-medium text-gray-900 max-w-40 truncate">{row.name}</td>
+                          <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{row.picName}</td>
+                          <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{row.customer}</td>
+                          <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{formatDate(row.endDate)}</td>
+                          <td className={`px-4 py-3 font-semibold whitespace-nowrap ${isLate ? "text-red-600" : isNear ? "text-yellow-600" : "text-gray-600"}`}>
+                            {isLate ? `Terlambat ${-row.daysRemaining} hari` : row.daysRemaining === 0 ? "Hari ini" : `Sisa ${row.daysRemaining} hari`}
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium border ${getStatusColor(row.status)}`}>
+                              {STATUS_LABELS[row.status as keyof typeof STATUS_LABELS] ?? row.status}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-2">
+                              <div className="flex-1 h-1.5 bg-gray-200 rounded-full min-w-14">
+                                <div className="h-1.5 bg-blue-500 rounded-full" style={{ width: `${row.overallProgress}%` }} />
+                              </div>
+                              <span className="text-xs text-gray-600 font-medium">{row.overallProgress}%</span>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    },
+                  )}
+                </tbody>
+              </table>
+              {taskMonitoring.length === 0 && (
+                <div className="py-12 text-center text-gray-400 text-sm">Tidak ada data proyek</div>
               )}
-            </tbody>
-          </table>
-          {taskMonitoring.length === 0 && (
-            <div className="py-12 text-center text-gray-400 text-sm">
-              Tidak ada data proyek
             </div>
-          )}
-        </div>
-        {totalMonitorPages > 1 && (
-          <div className="px-5 py-3 border-t border-gray-100 flex items-center justify-between">
-            <p className="text-xs text-gray-500">
-              {(monitorPage - 1) * monitorPerPage + 1}–{Math.min(monitorPage * monitorPerPage, taskMonitoring.length)} dari {taskMonitoring.length}
-            </p>
-            <div className="flex items-center gap-1">
-              <button onClick={() => setMonitorPage(Math.max(1, monitorPage - 1))} disabled={monitorPage === 1}
-                className="px-2 py-1 text-xs border border-gray-200 rounded hover:bg-gray-50 disabled:opacity-40">‹</button>
-              {Array.from({ length: totalMonitorPages }, (_, i) => i + 1).map((n) => (
-                <button key={n} onClick={() => setMonitorPage(n)}
-                  className={`px-2.5 py-1 text-xs border rounded ${monitorPage === n ? "bg-blue-600 text-white border-blue-600" : "border-gray-200 hover:bg-gray-50"}`}>
-                  {n}
-                </button>
-              ))}
-              <button onClick={() => setMonitorPage(Math.min(totalMonitorPages, monitorPage + 1))} disabled={monitorPage === totalMonitorPages}
-                className="px-2 py-1 text-xs border border-gray-200 rounded hover:bg-gray-50 disabled:opacity-40">›</button>
-            </div>
+            {totalMonitorPages > 1 && (
+              <div className="px-5 py-3 border-t border-gray-100 flex items-center justify-between">
+                <p className="text-xs text-gray-500">
+                  {(monitorPage - 1) * monitorPerPage + 1}–{Math.min(monitorPage * monitorPerPage, taskMonitoring.length)} dari {taskMonitoring.length}
+                </p>
+                <div className="flex items-center gap-1">
+                  <button onClick={() => setMonitorPage(Math.max(1, monitorPage - 1))} disabled={monitorPage === 1}
+                    className="px-2 py-1 text-xs border border-gray-200 rounded hover:bg-gray-50 disabled:opacity-40">‹</button>
+                  {Array.from({ length: totalMonitorPages }, (_, i) => i + 1).map((n) => (
+                    <button key={n} onClick={() => setMonitorPage(n)}
+                      className={`px-2.5 py-1 text-xs border rounded ${monitorPage === n ? "bg-blue-600 text-white border-blue-600" : "border-gray-200 hover:bg-gray-50"}`}>
+                      {n}
+                    </button>
+                  ))}
+                  <button onClick={() => setMonitorPage(Math.min(totalMonitorPages, monitorPage + 1))} disabled={monitorPage === totalMonitorPages}
+                    className="px-2 py-1 text-xs border border-gray-200 rounded hover:bg-gray-50 disabled:opacity-40">›</button>
+                </div>
+              </div>
+            )}
           </div>
-        )}
-      </div>
         );
       })()}
     </div>
