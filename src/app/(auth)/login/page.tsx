@@ -108,7 +108,7 @@ function LoginForm() {
         </p>
         <div className="space-y-1.5">
           {[
-            { label: "Atasan (Manager)", email: "budi@perusahaan.com" },
+            { label: "Manager", email: "budi@perusahaan.com" },
             { label: "PIC — Project Leader", email: "rina@perusahaan.com" },
             { label: "PIC — Engineer Product", email: "agus@perusahaan.com" },
           ].map(({ label, email: demoEmail }) => (

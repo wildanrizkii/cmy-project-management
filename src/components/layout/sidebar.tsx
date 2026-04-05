@@ -113,7 +113,7 @@ export function Sidebar() {
                 <p className="text-sm font-semibold truncate">{session?.user?.name}</p>
                 <p className="text-xs text-gray-400 truncate">
                   {session?.user?.role === "ATASAN"
-                    ? "Atasan (Manager)"
+                    ? "Manager"
                     : DEPARTMENT_LABELS[(session?.user?.department as Department) ?? "PROJECT_LEADER"]}
                 </p>
               </div>

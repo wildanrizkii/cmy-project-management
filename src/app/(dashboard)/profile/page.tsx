@@ -73,7 +73,7 @@ export default function ProfilePage() {
             <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${
               user?.role === "ATASAN" ? "bg-purple-100 text-purple-700" : "bg-green-100 text-green-700"
             }`}>
-              {user?.role === "ATASAN" ? "Atasan (Manager)" : "Bawahan (PIC)"}
+              {user?.role === "ATASAN" ? "Manager" : "PIC"}
             </span>
             {user?.department && (
               <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">

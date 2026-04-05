@@ -130,7 +130,7 @@ export function CreateProjectModal({ onClose, onCreate }: Props) {
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-gray-600 mb-1">PIC (Bawahan) *</label>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">PIC *</label>
               <select
                 required
                 value={form.picId}

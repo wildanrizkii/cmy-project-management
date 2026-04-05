@@ -13,8 +13,8 @@ import type { User, Department } from "@/types";
 import { useToast } from "@/components/layout/toast-context";
 
 const ROLE_OPTIONS = [
-  { value: "ATASAN", label: "Atasan (Manager)" },
-  { value: "BAWAHAN", label: "Bawahan (PIC)" },
+  { value: "ATASAN", label: "Manager" },
+  { value: "BAWAHAN", label: "PIC" },
 ];
 
 const DEPT_OPTIONS = Object.entries(DEPARTMENT_LABELS).map(([value, label]) => ({ value, label }));
@@ -162,8 +162,8 @@ export default function UsersPage() {
       <div className="grid grid-cols-3 gap-4">
         {[
           { label: "Total User", value: users.length, icon: Users, color: "text-blue-600 bg-blue-50" },
-          { label: "Atasan", value: users.filter((u) => u.role === "ATASAN").length, icon: ShieldCheck, color: "text-purple-600 bg-purple-50" },
-          { label: "Bawahan (PIC)", value: users.filter((u) => u.role === "BAWAHAN").length, icon: UserIcon, color: "text-green-600 bg-green-50" },
+          { label: "Manager", value: users.filter((u) => u.role === "ATASAN").length, icon: ShieldCheck, color: "text-purple-600 bg-purple-50" },
+          { label: "PIC", value: users.filter((u) => u.role === "BAWAHAN").length, icon: UserIcon, color: "text-green-600 bg-green-50" },
         ].map(({ label, value, icon: Icon, color }) => (
           <div key={label} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 flex items-center gap-4">
             <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${color}`}>
@@ -251,7 +251,7 @@ export default function UsersPage() {
                         ? "bg-purple-100 text-purple-700"
                         : "bg-green-100 text-green-700"
                     }`}>
-                      {u.role === "ATASAN" ? "Atasan" : "Bawahan"}
+                      {u.role === "ATASAN" ? "Manager" : "PIC"}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-gray-600">
