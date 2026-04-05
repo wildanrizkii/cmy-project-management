@@ -28,7 +28,6 @@ import {
   Pie,
   Cell,
   ResponsiveContainer,
-  TooltipProps,
 } from "recharts";
 import { STATUS_LABELS, FASE_LABELS } from "@/types";
 
@@ -44,12 +43,11 @@ const STATUS_COLORS: Record<string, string> = {
 
 type ProjectRef = { code: string; name: string };
 
-function ProjectListTooltip({
-  active,
-  payload,
-  labelKey,
-  countKey,
-}: TooltipProps<number, string> & { labelKey: string; countKey: string }) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AnyTooltipProps = Record<string, any>;
+
+function ProjectListTooltip(props: AnyTooltipProps & { labelKey: string; countKey: string }) {
+  const { active, payload, labelKey, countKey } = props;
   if (!active || !payload?.length) return null;
   const d = payload[0]?.payload as Record<string, unknown>;
   const label = d[labelKey] as string;
@@ -76,7 +74,8 @@ function ProjectListTooltip({
   );
 }
 
-function HinanhyoTooltip({ active, payload }: TooltipProps<number, string>) {
+function HinanhyoTooltip(props: AnyTooltipProps) {
+  const { active, payload } = props;
   if (!active || !payload?.length) return null;
   const d = payload[0]?.payload as {
     code: string; name: string;
@@ -111,7 +110,8 @@ function HinanhyoTooltip({ active, payload }: TooltipProps<number, string>) {
   );
 }
 
-function StatusPieTooltip({ active, payload }: TooltipProps<number, string>) {
+function StatusPieTooltip(props: AnyTooltipProps) {
+  const { active, payload } = props;
   if (!active || !payload?.length) return null;
   const d = payload[0]?.payload as { name: string; value: number; projects: ProjectRef[] };
   if (!d.value) return null;
