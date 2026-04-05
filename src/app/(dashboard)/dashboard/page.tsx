@@ -131,6 +131,26 @@ function StatusPieTooltip(props: AnyTooltipProps) {
   );
 }
 
+// Label on top of stacked bar showing total
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function HinanhyoTotalLabel(props: any) {
+  const { x, y, width, payload } = props;
+  const total = (payload as { total: number })?.total;
+  if (!total) return null;
+  return (
+    <text
+      x={x + width / 2}
+      y={y - 4}
+      textAnchor="middle"
+      fontSize={11}
+      fontWeight="bold"
+      fill="#92400e"
+    >
+      {total}
+    </text>
+  );
+}
+
 // Label rendered inside pie segments
 function PieCountLabel({
   cx, cy, midAngle, innerRadius, outerRadius, value,
@@ -151,19 +171,29 @@ function PieCountLabel({
   );
 }
 
-// ─── Clock hook ───────────────────────────────────────────────────────────────
-function useRealtimeClock() {
+// ─── Clock — isolated so it doesn't trigger chart re-renders ─────────────────
+function ClockDisplay() {
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(id);
   }, []);
-  return now;
+  return (
+    <div className="flex items-center gap-3 bg-white border border-gray-100 shadow-sm rounded-xl px-4 py-2.5 self-start sm:self-auto">
+      <Calendar className="w-4 h-4 text-gray-400 shrink-0" />
+      <span className="text-sm text-gray-600 hidden sm:block">
+        {now.toLocaleDateString("id-ID", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+      </span>
+      <span className="text-gray-300 text-sm hidden sm:block">|</span>
+      <span className="font-mono text-blue-600 font-semibold tabular-nums text-sm tracking-wider">
+        {now.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", second: "2-digit" })} WIB
+      </span>
+    </div>
+  );
 }
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function DashboardPage() {
-  const clock = useRealtimeClock();
   const [monitorPage, setMonitorPage] = useState(1);
   const monitorPerPage = 8;
 
@@ -242,16 +272,7 @@ export default function DashboardPage() {
           <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
           <p className="text-sm text-gray-500 mt-0.5">Pemantauan proyek secara real-time</p>
         </div>
-        <div className="flex items-center gap-3 bg-white border border-gray-100 shadow-sm rounded-xl px-4 py-2.5 self-start sm:self-auto">
-          <Calendar className="w-4 h-4 text-gray-400 shrink-0" />
-          <span className="text-sm text-gray-600 hidden sm:block">
-            {clock.toLocaleDateString("id-ID", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
-          </span>
-          <span className="text-gray-300 text-sm hidden sm:block">|</span>
-          <span className="font-mono text-blue-600 font-semibold tabular-nums text-sm tracking-wider">
-            {clock.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", second: "2-digit" })} WIB
-          </span>
-        </div>
+        <ClockDisplay />
       </div>
 
       {/* Filter bar */}
@@ -343,6 +364,7 @@ export default function DashboardPage() {
                     dataKey="value"
                     labelLine={false}
                     label={PieCountLabel as never}
+                    isAnimationActive={false}
                   >
                     {statusChartData.map((entry: { status: string }, i: number) => (
                       <Cell key={i} fill={STATUS_COLORS[entry.status] ?? "#94a3b8"} />
@@ -351,12 +373,11 @@ export default function DashboardPage() {
                   <Tooltip content={<StatusPieTooltip />} />
                 </PieChart>
               </ResponsiveContainer>
-              {/* Legend */}
               <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2 justify-center">
                 {statusChartData.filter((d: { value: number }) => d.value > 0).map((d: { status: string; name: string; value: number }) => (
                   <span key={d.status} className="flex items-center gap-1 text-xs text-gray-600">
                     <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: STATUS_COLORS[d.status] }} />
-                    {d.name}
+                    {d.name} ({d.value})
                   </span>
                 ))}
               </div>
@@ -372,7 +393,7 @@ export default function DashboardPage() {
           </h2>
           <p className="text-xs text-gray-400 mb-3">Hover untuk lihat daftar proyek</p>
           <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={phaseChartData} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
+            <BarChart data={phaseChartData} margin={{ top: 20, right: 8, left: -20, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} />
               <XAxis dataKey="fase" fontSize={11} tick={{ fill: "#6b7280" }} />
               <YAxis allowDecimals={false} fontSize={11} tick={{ fill: "#6b7280" }} />
@@ -381,8 +402,13 @@ export default function DashboardPage() {
                   <ProjectListTooltip {...props} labelKey="fase" countKey="count" />
                 )}
               />
-              <Bar dataKey="count" name="Proyek" fill="#3b82f6" radius={[4, 4, 0, 0]}
-                label={{ position: "top", fontSize: 11, fontWeight: "bold", fill: "#1d4ed8" }}
+              <Bar
+                dataKey="count"
+                name="Proyek"
+                fill="#3b82f6"
+                radius={[4, 4, 0, 0]}
+                isAnimationActive={false}
+                label={{ position: "top", fontSize: 12, fontWeight: "bold", fill: "#1d4ed8" }}
               />
             </BarChart>
           </ResponsiveContainer>
@@ -400,14 +426,22 @@ export default function DashboardPage() {
           ) : (
             <>
               <ResponsiveContainer width="100%" height={200}>
-                <BarChart data={hinanhyoByProject} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
+                <BarChart data={hinanhyoByProject} margin={{ top: 20, right: 8, left: -20, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} />
                   <XAxis dataKey="code" fontSize={10} tick={{ fill: "#6b7280" }} />
                   <YAxis allowDecimals={false} fontSize={11} tick={{ fill: "#6b7280" }} />
                   <Tooltip content={<HinanhyoTooltip />} />
-                  <Bar dataKey="DITERIMA" name="Diterima" stackId="a" fill="#22c55e" />
-                  <Bar dataKey="DITOLAK" name="Ditolak" stackId="a" fill="#ef4444" />
-                  <Bar dataKey="PENDING" name="Pending" stackId="a" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="DITERIMA" name="Diterima" stackId="a" fill="#22c55e" isAnimationActive={false} />
+                  <Bar dataKey="DITOLAK" name="Ditolak" stackId="a" fill="#ef4444" isAnimationActive={false} />
+                  <Bar
+                    dataKey="PENDING"
+                    name="Pending"
+                    stackId="a"
+                    fill="#f59e0b"
+                    radius={[4, 4, 0, 0]}
+                    isAnimationActive={false}
+                    label={<HinanhyoTotalLabel />}
+                  />
                 </BarChart>
               </ResponsiveContainer>
               <div className="flex gap-3 mt-2 justify-center">
@@ -436,14 +470,16 @@ export default function DashboardPage() {
             Man Power: Kebutuhan vs Aktual
           </h2>
           <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={charts.mpChart ?? []} margin={{ left: -10 }}>
+            <BarChart data={charts.mpChart ?? []} margin={{ top: 20, left: -10, right: 8, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} />
               <XAxis dataKey="code" fontSize={11} />
               <YAxis fontSize={11} />
               <Tooltip />
               <Legend fontSize={11} />
-              <Bar dataKey="kebutuhan" name="Kebutuhan" fill="#93c5fd" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="aktual" name="Aktual" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="kebutuhan" name="Kebutuhan" fill="#93c5fd" radius={[4, 4, 0, 0]} isAnimationActive={false}
+                label={{ position: "top", fontSize: 10, fontWeight: "bold", fill: "#1e40af" }} />
+              <Bar dataKey="aktual" name="Aktual" fill="#3b82f6" radius={[4, 4, 0, 0]} isAnimationActive={false}
+                label={{ position: "top", fontSize: 10, fontWeight: "bold", fill: "#1d4ed8" }} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -462,14 +498,16 @@ export default function DashboardPage() {
             </div>
           ) : (
             <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={charts.ctChart} margin={{ left: -10 }}>
+              <BarChart data={charts.ctChart} margin={{ top: 20, left: -10, right: 8, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} />
                 <XAxis dataKey="code" fontSize={11} />
                 <YAxis fontSize={11} />
                 <Tooltip />
                 <Legend fontSize={11} />
-                <Bar dataKey="target" name="Target" fill="#86efac" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="aktual" name="Aktual" fill="#22c55e" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="target" name="Target" fill="#86efac" radius={[4, 4, 0, 0]} isAnimationActive={false}
+                  label={{ position: "top", fontSize: 10, fontWeight: "bold", fill: "#166534" }} />
+                <Bar dataKey="aktual" name="Aktual" fill="#22c55e" radius={[4, 4, 0, 0]} isAnimationActive={false}
+                  label={{ position: "top", fontSize: 10, fontWeight: "bold", fill: "#15803d" }} />
               </BarChart>
             </ResponsiveContainer>
           )}
