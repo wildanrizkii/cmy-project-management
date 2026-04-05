@@ -1,7 +1,9 @@
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { Sidebar } from "@/components/layout/sidebar";
-import { CreateProjectDialog } from "@/components/projects/create-project-dialog";
+import { SidebarProvider } from "@/components/layout/sidebar-context";
+import { MainContent } from "@/components/layout/main-content";
+import { ToastProvider } from "@/components/layout/toast-context";
 
 export default async function DashboardLayout({
   children,
@@ -12,12 +14,13 @@ export default async function DashboardLayout({
   if (!session?.user) redirect("/login");
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Sidebar />
-      <div className="lg:pl-[260px]">
-        <main className="min-h-screen">{children}</main>
-      </div>
-      <CreateProjectDialog />
-    </div>
+    <SidebarProvider>
+      <ToastProvider>
+        <div className="min-h-screen bg-gray-50 flex">
+          <Sidebar />
+          <MainContent>{children}</MainContent>
+        </div>
+      </ToastProvider>
+    </SidebarProvider>
   );
 }

@@ -1,7 +1,5 @@
-// src/lib/auth.ts
 import NextAuth from "next-auth";
 import { PrismaAdapter } from "@auth/prisma-adapter";
-import Google from "next-auth/providers/google";
 import Credentials from "next-auth/providers/credentials";
 import { db } from "@/lib/db";
 import bcrypt from "bcryptjs";
@@ -12,12 +10,6 @@ const loginSchema = z.object({
   password: z.string().min(6),
 });
 
-const hasGoogle =
-  !!process.env.GOOGLE_CLIENT_ID &&
-  process.env.GOOGLE_CLIENT_ID !== "your-google-client-id" &&
-  !!process.env.GOOGLE_CLIENT_SECRET &&
-  process.env.GOOGLE_CLIENT_SECRET !== "your-google-client-secret";
-
 export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: PrismaAdapter(db),
   session: { strategy: "jwt" },
@@ -26,14 +18,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     error: "/login",
   },
   providers: [
-    ...(hasGoogle
-      ? [
-          Google({
-            clientId: process.env.GOOGLE_CLIENT_ID!,
-            clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-          }),
-        ]
-      : []),
     Credentials({
       async authorize(credentials) {
         const parsed = loginSchema.safeParse(credentials);
@@ -51,7 +35,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         );
         if (!passwordMatch) return null;
 
-        return user;
+        return {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          department: user.department,
+        };
       },
     }),
   ],
@@ -60,6 +50,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (user) {
         token.id = user.id;
         token.role = (user as { role?: string }).role;
+        token.department = (user as { department?: string }).department;
+        token.name = user.name;
       }
       return token;
     },
@@ -67,6 +59,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (token) {
         session.user.id = token.id as string;
         session.user.role = token.role as string;
+        session.user.department = token.department as string | undefined;
+        session.user.name = token.name as string;
       }
       return session;
     },

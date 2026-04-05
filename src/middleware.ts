@@ -6,16 +6,13 @@ export default auth((req) => {
 
   const isLoggedIn = !!session;
 
-  const publicRoutes = ["/", "/login", "/register"];
+  const publicRoutes = ["/", "/login"];
 
   const isApiAuthRoute = nextUrl.pathname.startsWith("/api/auth");
-  const isPublicApiRoute =
-    nextUrl.pathname === "/api/users" && req.method === "POST";
 
   const isPublicRoute =
     publicRoutes.includes(nextUrl.pathname) ||
-    isApiAuthRoute ||
-    isPublicApiRoute;
+    isApiAuthRoute;
 
   if (isPublicRoute) return NextResponse.next();
 

@@ -1,43 +1,61 @@
-import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { registerSchema } from "@/lib/validations";
 import bcrypt from "bcryptjs";
+import { NextRequest } from "next/server";
 
-export async function GET() {
+// GET all users (for PIC selection, etc.)
+export async function GET(req: NextRequest) {
   const session = await auth();
-  if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session?.user) return Response.json({ error: "Unauthorized" }, { status: 401 });
+
+  const { searchParams } = new URL(req.url);
+  const role = searchParams.get("role");
 
   const users = await db.user.findMany({
-    select: { id: true, name: true, email: true, image: true, role: true, createdAt: true },
+    where: role ? { role: role as "ATASAN" | "BAWAHAN" } : undefined,
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      role: true,
+      department: true,
+      createdAt: true,
+    },
     orderBy: { name: "asc" },
   });
 
-  return NextResponse.json(users);
+  return Response.json(users);
 }
 
-export async function POST(request: NextRequest) {
-  try {
-    const body = await request.json();
-    const parsed = registerSchema.safeParse(body);
-    if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+// POST register new user (public)
+export async function POST(req: NextRequest) {
+  const body = await req.json();
+  const { name, email, password, role, department } = body;
 
-    const existing = await db.user.findUnique({ where: { email: parsed.data.email } });
-    if (existing) return NextResponse.json({ error: "Email sudah terdaftar" }, { status: 409 });
-
-    const hashedPassword = await bcrypt.hash(parsed.data.password, 10);
-    const user = await db.user.create({
-      data: {
-        name: parsed.data.name,
-        email: parsed.data.email,
-        password: hashedPassword,
-      },
-      select: { id: true, name: true, email: true, image: true },
-    });
-
-    return NextResponse.json(user, { status: 201 });
-  } catch (error) {
-    console.error("[REGISTER ERROR]", error);
-    return NextResponse.json({ error: String(error) }, { status: 500 });
+  if (!name || !email || !password) {
+    return Response.json({ error: "Nama, email, dan password wajib diisi" }, { status: 400 });
   }
+  if (password.length < 8) {
+    return Response.json({ error: "Password minimal 8 karakter" }, { status: 400 });
+  }
+
+  const existing = await db.user.findUnique({ where: { email } });
+  if (existing) {
+    return Response.json({ error: "Email sudah terdaftar" }, { status: 409 });
+  }
+
+  const hashed = await bcrypt.hash(password, 10);
+
+  const user = await db.user.create({
+    data: {
+      name,
+      email,
+      password: hashed,
+      role: role || "BAWAHAN",
+      department: department || null,
+    },
+    select: { id: true, name: true, email: true, role: true, department: true },
+  });
+
+  return Response.json(user, { status: 201 });
 }

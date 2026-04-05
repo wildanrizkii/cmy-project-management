@@ -1,73 +1,499 @@
-import { auth } from "@/lib/auth";
-import { db } from "@/lib/db";
-import { Header } from "@/components/layout/header";
-import { DashboardStats } from "@/components/dashboard/stats";
-import { RecentProjects } from "@/components/dashboard/recent-projects";
-import { TaskStatusChart } from "@/components/dashboard/task-status-chart";
+"use client";
+import { apiFetch } from "@/lib/fetch-client";
 
-export default async function DashboardPage() {
-  const session = await auth();
-  if (!session?.user) return null;
+import { useQuery } from "@tanstack/react-query";
+import { useState, useEffect } from "react";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  Clock,
+  TrendingUp,
+  Activity,
+  Calendar,
+  Users,
+  BarChart3,
+  AlertCircle,
+} from "lucide-react";
+import {
+  formatDate,
+  getStatusColor,
+  getFaseColor,
+  getPriorityColor,
+} from "@/lib/utils";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  PieChart,
+  Pie,
+  Cell,
+  ResponsiveContainer,
+  LineChart,
+  Line,
+} from "recharts";
+import { STATUS_LABELS, FASE_LABELS } from "@/types";
 
-  const [projects, tasks] = await Promise.all([
-    db.project.findMany({
-      where: {
-        OR: [
-          { ownerId: session.user.id },
-          { members: { some: { userId: session.user.id } } },
-        ],
-      },
-      include: { _count: { select: { tasks: true, members: true } } },
-      orderBy: { updatedAt: "desc" },
-      take: 5,
-    }),
-    db.task.findMany({
-      where: {
-        project: {
-          OR: [
-            { ownerId: session.user.id },
-            { members: { some: { userId: session.user.id } } },
-          ],
-        },
-      },
-      select: { status: true },
-    }),
-  ]);
+const STATUS_COLORS: Record<string, string> = {
+  BELUM_MULAI: "#94a3b8",
+  DALAM_PROSES: "#3b82f6",
+  SELESAI: "#22c55e",
+  TERLAMBAT: "#ef4444",
+  TUNDA: "#f97316",
+};
 
-  const taskStats = {
-    total: tasks.length,
-    todo: tasks.filter((t) => t.status === "TODO").length,
-    inProgress: tasks.filter((t) => t.status === "IN_PROGRESS").length,
-    done: tasks.filter((t) => t.status === "DONE").length,
-  };
 
-  return (
-    <div>
-      <Header title="Dashboard" />
-      <div className="p-6 space-y-6">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900">
-            Selamat datang, {session.user.name?.split(" ")[0]}!
-          </h2>
-          <p className="text-muted-foreground mt-1">
-            Berikut ringkasan aktivitas proyek Anda.
-          </p>
-        </div>
+function useRealtimeClock() {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  return now;
+}
 
-        <DashboardStats
-          totalProjects={projects.length}
-          taskStats={taskStats}
-        />
+export default function DashboardPage() {
+  const clock = useRealtimeClock();
+  const [monitorPage, setMonitorPage] = useState(1);
+  const monitorPerPage = 8;
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2">
-            <RecentProjects projects={projects as Parameters<typeof RecentProjects>[0]["projects"]} />
-          </div>
-          <div>
-            <TaskStatusChart taskStats={taskStats} />
-          </div>
+  const { data, isLoading } = useQuery({
+    queryKey: ["dashboard"],
+    queryFn: () => apiFetch("/api/dashboard").then((r) => r.json()),
+    refetchInterval: 30000,
+  });
+
+  if (isLoading) {
+    return (
+      <div className="p-8 flex items-center justify-center min-h-screen">
+        <div className="text-center space-y-3">
+          <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto" />
+          <p className="text-gray-500 text-sm">Memuat dashboard...</p>
         </div>
       </div>
+    );
+  }
+
+  const kpi = data?.kpi ?? {};
+  const charts = data?.charts ?? {};
+  const taskMonitoring = data?.taskMonitoring ?? [];
+
+  const kpiCards = [
+    {
+      label: "Proyek Aktif",
+      value: kpi.totalAktif ?? 0,
+      icon: Activity,
+      color: "bg-blue-500",
+      bg: "bg-blue-50",
+      text: "text-blue-700",
+    },
+    {
+      label: "Proyek Terlambat",
+      value: kpi.totalTerlambat ?? 0,
+      icon: AlertTriangle,
+      color: "bg-red-500",
+      bg: "bg-red-50",
+      text: "text-red-700",
+    },
+    {
+      label: "Hinanhyo Pending",
+      value: kpi.totalHinanhyoPending ?? 0,
+      icon: AlertCircle,
+      color: "bg-orange-500",
+      bg: "bg-orange-50",
+      text: "text-orange-700",
+    },
+    {
+      label: "Rata-rata Progress",
+      value: `${kpi.rataRataProgress ?? 0}%`,
+      icon: TrendingUp,
+      color: "bg-green-500",
+      bg: "bg-green-50",
+      text: "text-green-700",
+    },
+    {
+      label: "Selesai Bulan Ini",
+      value: kpi.selesaiBulanIni ?? 0,
+      icon: CheckCircle2,
+      color: "bg-emerald-500",
+      bg: "bg-emerald-50",
+      text: "text-emerald-700",
+    },
+    {
+      label: "Deadline 7 Hari",
+      value: kpi.deadline7Hari ?? 0,
+      icon: Clock,
+      color: "bg-yellow-500",
+      bg: "bg-yellow-50",
+      text: "text-yellow-700",
+    },
+  ];
+
+  const statusChartData = (charts.statusDist ?? []).map(
+    (d: { status: string; count: number }) => ({
+      name: STATUS_LABELS[d.status as keyof typeof STATUS_LABELS] ?? d.status,
+      value: d.count,
+      status: d.status,
+    }),
+  );
+
+  const phaseChartData = Object.entries(charts.phaseAvg ?? {}).map(
+    ([fase, avg]) => ({
+      fase: FASE_LABELS[fase as keyof typeof FASE_LABELS] ?? fase,
+      progress: avg,
+    }),
+  );
+
+  const hinanhyoChartData = [
+    {
+      name: "Diterima",
+      value: charts.hinanhyoDist?.DITERIMA ?? 0,
+      fill: "#22c55e",
+    },
+    {
+      name: "Ditolak",
+      value: charts.hinanhyoDist?.DITOLAK ?? 0,
+      fill: "#ef4444",
+    },
+    {
+      name: "Pending",
+      value: charts.hinanhyoDist?.PENDING ?? 0,
+      fill: "#f59e0b",
+    },
+  ];
+
+  return (
+    <div className="p-6 space-y-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
+          <p className="text-sm text-gray-500 mt-0.5">Pemantauan proyek secara real-time</p>
+        </div>
+        <div className="flex items-center gap-3 bg-white border border-gray-100 shadow-sm rounded-xl px-4 py-2.5 self-start sm:self-auto">
+          <Calendar className="w-4 h-4 text-gray-400 shrink-0" />
+          <span className="text-sm text-gray-600">
+            {clock.toLocaleDateString("id-ID", {
+              weekday: "long",
+              day: "numeric",
+              month: "long",
+              year: "numeric",
+            })}
+          </span>
+          <span className="text-gray-300 text-sm">|</span>
+          <span className="font-mono text-blue-600 font-semibold tabular-nums text-sm tracking-wider">
+            {clock.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", second: "2-digit" }).replace(/\./g, ".")} WIB
+          </span>
+        </div>
+      </div>
+
+      {/* KPI Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
+        {kpiCards.map(({ label, value, icon: Icon, color, bg, text }) => (
+          <div
+            key={label}
+            className="bg-white rounded-xl border border-gray-100 shadow-sm p-4"
+          >
+            <div
+              className={`w-10 h-10 rounded-lg ${bg} flex items-center justify-center mb-3`}
+            >
+              <Icon className={`w-5 h-5 ${text}`} />
+            </div>
+            <div className={`text-2xl font-bold ${text}`}>{value}</div>
+            <div className="text-xs text-gray-500 mt-0.5 font-medium">
+              {label}
+            </div>
+          </div>
+        ))}
+      </div>
+
+
+      {/* Charts Row 1 */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Donut: Status Proyek */}
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+          <h2 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <BarChart3 className="w-4 h-4 text-blue-600" />
+            Distribusi Status Proyek
+          </h2>
+          <ResponsiveContainer width="100%" height={200}>
+            <PieChart>
+              <Pie
+                data={statusChartData}
+                cx="50%"
+                cy="50%"
+                innerRadius={50}
+                outerRadius={80}
+                dataKey="value"
+                label={({ name, value }) =>
+                  value > 0 ? `${name}: ${value}` : ""
+                }
+                labelLine={false}
+                fontSize={11}
+              >
+                {statusChartData.map((entry: { status: string }, i: number) => (
+                  <Cell
+                    key={i}
+                    fill={STATUS_COLORS[entry.status] ?? "#94a3b8"}
+                  />
+                ))}
+              </Pie>
+              <Tooltip />
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
+
+        {/* Bar: Progress per Fase */}
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+          <h2 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <TrendingUp className="w-4 h-4 text-blue-600" />
+            Rata-rata Progress per Fase
+          </h2>
+          <ResponsiveContainer width="100%" height={200}>
+            <BarChart data={phaseChartData} layout="vertical">
+              <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+              <XAxis
+                type="number"
+                domain={[0, 100]}
+                tickFormatter={(v) => `${v}%`}
+                fontSize={11}
+              />
+              <YAxis type="category" dataKey="fase" width={90} fontSize={11} />
+              <Tooltip formatter={(v) => `${v}%`} />
+              <Bar dataKey="progress" fill="#3b82f6" radius={[0, 4, 4, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+
+        {/* Donut: Hinanhyo/DR */}
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+          <h2 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-orange-500" />
+            Status Hinanhyo &amp; DR
+          </h2>
+          <ResponsiveContainer width="100%" height={200}>
+            <PieChart>
+              <Pie
+                data={hinanhyoChartData}
+                cx="50%"
+                cy="50%"
+                innerRadius={50}
+                outerRadius={80}
+                dataKey="value"
+                label={({ name, value }) =>
+                  value > 0 ? `${name}: ${value}` : ""
+                }
+                labelLine={false}
+                fontSize={11}
+              >
+                {hinanhyoChartData.map((entry, i) => (
+                  <Cell key={i} fill={entry.fill} />
+                ))}
+              </Pie>
+              <Tooltip />
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      {/* Charts Row 2: MP & Cycle Time */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* MP Chart */}
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+          <h2 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <Users className="w-4 h-4 text-blue-600" />
+            Man Power: Kebutuhan vs Aktual
+          </h2>
+          <ResponsiveContainer width="100%" height={220}>
+            <BarChart data={charts.mpChart ?? []} margin={{ left: -10 }}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} />
+              <XAxis dataKey="code" fontSize={11} />
+              <YAxis fontSize={11} />
+              <Tooltip />
+              <Legend fontSize={11} />
+              <Bar
+                dataKey="kebutuhan"
+                name="Kebutuhan"
+                fill="#93c5fd"
+                radius={[4, 4, 0, 0]}
+              />
+              <Bar
+                dataKey="aktual"
+                name="Aktual"
+                fill="#3b82f6"
+                radius={[4, 4, 0, 0]}
+              />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+
+        {/* Cycle Time Chart */}
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+          <h2 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <Clock className="w-4 h-4 text-blue-600" />
+            Cycle Time: Target vs Aktual (hari)
+          </h2>
+          {(charts.ctChart ?? []).length === 0 ? (
+            <div className="h-55 flex flex-col items-center justify-center gap-2">
+              <BarChart3 className="w-8 h-8 text-gray-200" />
+              <p className="text-sm text-gray-400">Belum ada data cycle time aktual</p>
+              <p className="text-xs text-gray-300">Isi Cycle Time Aktual di tab MP & Cycle Time proyek</p>
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={charts.ctChart} margin={{ left: -10 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                <XAxis dataKey="code" fontSize={11} />
+                <YAxis fontSize={11} />
+                <Tooltip />
+                <Legend fontSize={11} />
+                <Bar dataKey="target" name="Target" fill="#86efac" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="aktual" name="Aktual" fill="#22c55e" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+      </div>
+
+      {/* Task Monitoring Table */}
+      {(() => {
+        const totalMonitorPages = Math.ceil(taskMonitoring.length / monitorPerPage);
+        const paginatedMonitor = taskMonitoring.slice((monitorPage - 1) * monitorPerPage, monitorPage * monitorPerPage);
+        return (
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm">
+        <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Calendar className="w-4 h-4 text-blue-600" />
+            <h2 className="text-sm font-semibold text-gray-900">Task Monitoring</h2>
+            <span className="text-xs text-gray-400">({taskMonitoring.length} proyek)</span>
+          </div>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50">
+              <tr>
+                {[
+                  "Kode",
+                  "Nama Proyek",
+                  "PIC",
+                  "Customer",
+                  "Deadline",
+                  "Sisa/Terlambat",
+                  "Status",
+                  "Progress",
+                ].map((h) => (
+                  <th
+                    key={h}
+                    className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider"
+                  >
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {paginatedMonitor.map(
+                (row: {
+                  code: string;
+                  name: string;
+                  picName: string;
+                  customer: string;
+                  endDate: string;
+                  daysRemaining: number;
+                  status: string;
+                  overallProgress: number;
+                }) => {
+                  const isLate = row.daysRemaining < 0;
+                  const isNear =
+                    row.daysRemaining >= 0 && row.daysRemaining <= 7;
+                  return (
+                    <tr
+                      key={row.code}
+                      className={
+                        isLate ? "bg-red-50" : isNear ? "bg-yellow-50" : ""
+                      }
+                    >
+                      <td className="px-4 py-3 font-mono font-medium text-gray-700">
+                        {row.code}
+                      </td>
+                      <td className="px-4 py-3 font-medium text-gray-900 max-w-45 truncate">
+                        {row.name}
+                      </td>
+                      <td className="px-4 py-3 text-gray-600">{row.picName}</td>
+                      <td className="px-4 py-3 text-gray-600">
+                        {row.customer}
+                      </td>
+                      <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
+                        {formatDate(row.endDate)}
+                      </td>
+                      <td
+                        className={`px-4 py-3 font-semibold whitespace-nowrap ${isLate ? "text-red-600" : isNear ? "text-yellow-600" : "text-gray-600"}`}
+                      >
+                        {isLate
+                          ? `Terlambat ${-row.daysRemaining} hari`
+                          : row.daysRemaining === 0
+                          ? "Hari ini"
+                          : `Sisa ${row.daysRemaining} hari`}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span
+                          className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium border ${getStatusColor(row.status)}`}
+                        >
+                          {STATUS_LABELS[
+                            row.status as keyof typeof STATUS_LABELS
+                          ] ?? row.status}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1 h-1.5 bg-gray-200 rounded-full min-w-15">
+                            <div
+                              className="h-1.5 bg-blue-500 rounded-full transition-all"
+                              style={{ width: `${row.overallProgress}%` }}
+                            />
+                          </div>
+                          <span className="text-xs text-gray-600 font-medium">
+                            {row.overallProgress}%
+                          </span>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                },
+              )}
+            </tbody>
+          </table>
+          {taskMonitoring.length === 0 && (
+            <div className="py-12 text-center text-gray-400 text-sm">
+              Tidak ada data proyek
+            </div>
+          )}
+        </div>
+        {totalMonitorPages > 1 && (
+          <div className="px-5 py-3 border-t border-gray-100 flex items-center justify-between">
+            <p className="text-xs text-gray-500">
+              {(monitorPage - 1) * monitorPerPage + 1}–{Math.min(monitorPage * monitorPerPage, taskMonitoring.length)} dari {taskMonitoring.length}
+            </p>
+            <div className="flex items-center gap-1">
+              <button onClick={() => setMonitorPage(Math.max(1, monitorPage - 1))} disabled={monitorPage === 1}
+                className="px-2 py-1 text-xs border border-gray-200 rounded hover:bg-gray-50 disabled:opacity-40">‹</button>
+              {Array.from({ length: totalMonitorPages }, (_, i) => i + 1).map((n) => (
+                <button key={n} onClick={() => setMonitorPage(n)}
+                  className={`px-2.5 py-1 text-xs border rounded ${monitorPage === n ? "bg-blue-600 text-white border-blue-600" : "border-gray-200 hover:bg-gray-50"}`}>
+                  {n}
+                </button>
+              ))}
+              <button onClick={() => setMonitorPage(Math.min(totalMonitorPages, monitorPage + 1))} disabled={monitorPage === totalMonitorPages}
+                className="px-2 py-1 text-xs border border-gray-200 rounded hover:bg-gray-50 disabled:opacity-40">›</button>
+            </div>
+          </div>
+        )}
+      </div>
+        );
+      })()}
     </div>
   );
 }

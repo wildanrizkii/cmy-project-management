@@ -9,23 +9,70 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
-model User {
-  id            String    @id @default(cuid())
-  name          String?
-  email         String    @unique
-  emailVerified DateTime?
-  image         String?
-  password      String?
-  role          Role      @default(MEMBER)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+// ─────────────── ENUMS ───────────────
 
+enum UserRole {
+  ATASAN
+  BAWAHAN
+}
+
+enum Department {
+  PROJECT_LEADER
+  ENGINEER_PRODUCT
+  ENGINEERING_NEW_PART
+  CCO
+  PROCUREMENT
+}
+
+enum Priority {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum ProjectStatus {
+  BELUM_MULAI
+  DALAM_PROSES
+  SELESAI
+  TERLAMBAT
+  TUNDA
+}
+
+enum Fase {
+  RFQ
+  DIE_GO
+  EVENT_PROJECT
+  MASS_PRO
+}
+
+enum HinanhyoDRType {
+  HINANHYO
+  DR
+}
+
+enum HinanhyoDRStatus {
+  DITERIMA
+  DITOLAK
+  PENDING
+}
+
+// ─────────────── MODELS ───────────────
+
+model User {
+  id         String      @id @default(cuid())
+  name       String
+  email      String      @unique
+  password   String
+  role       UserRole    @default(BAWAHAN)
+  department Department?
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+
+  projectsAsPIC Project[]    @relation("ProjectPIC")
+  hinanhyoDRs   HinanhyoDR[]
+  activityLogs  ActivityLog[]
   accounts      Account[]
   sessions      Session[]
-  members       Member[]
-  tasksAssigned Task[]    @relation("AssignedTo")
-  tasksCreated  Task[]    @relation("CreatedBy")
-  projectsOwned Project[] @relation("ProjectOwner")
 
   @@map("users")
 }
@@ -71,138 +118,63 @@ model VerificationToken {
 }
 
 model Project {
-  id          String        @id @default(cuid())
-  name        String
-  description String?       @db.Text
-  status      ProjectStatus @default(ACTIVE)
-  startDate   DateTime?
-  endDate     DateTime?
-  ownerId     String
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  id                   String        @id @default(cuid())
+  code                 String        @unique // PRJ-001, PRJ-002
+  name                 String        @unique
+  description          String?       @db.Text
+  customer             String
+  picId                String
+  priority             Priority      @default(MEDIUM)
+  status               ProjectStatus @default(BELUM_MULAI)
+  currentFase          Fase          @default(RFQ)
+  startDate            DateTime
+  endDate              DateTime
+  kebutuhanMp          Int
+  aktualMp             Int?
+  cycleTimeTarget      Int // in working days
+  cycleTimeAktual      Int? // auto-calculated or manual
+  rfqProgress          Int           @default(0)
+  dieGoProgress        Int           @default(0)
+  eventProjectProgress Int           @default(0)
+  massProProgress      Int           @default(0)
+  overallProgress      Float         @default(0) // (rfq+dieGo+eventProject+massPro) / 4
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
 
-  owner   User     @relation("ProjectOwner", fields: [ownerId], references: [id])
-  phases  Phase[]
-  tasks   Task[]
-  members Member[]
+  pic          User         @relation("ProjectPIC", fields: [picId], references: [id])
+  hinanhyoDRs  HinanhyoDR[]
+  activityLogs ActivityLog[]
 
   @@map("projects")
 }
 
-model Phase {
-  id          String    @id @default(cuid())
-  name        String
-  description String?   @db.Text
-  startDate   DateTime?
-  endDate     DateTime?
-  order       Int       @default(0)
+model HinanhyoDR {
+  id          String           @id @default(cuid())
   projectId   String
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-
-  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  tasks   Task[]
-
-  @@map("phases")
-}
-
-model Task {
-  id          String     @id @default(cuid())
+  type        HinanhyoDRType
   title       String
-  description String?    @db.Text
-  status      TaskStatus @default(TODO)
-  priority    Priority   @default(MEDIUM)
-  startDate   DateTime?
-  dueDate     DateTime?
-  duration    Int?
-  progress    Int        @default(0)
-  projectId   String
-  phaseId     String?
-  assigneeId  String?
-  createdById String
-  parentId    String?
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
+  description String?          @db.Text
+  status      HinanhyoDRStatus @default(PENDING)
+  picId       String
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
 
-  project     Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  phase       Phase?       @relation(fields: [phaseId], references: [id])
-  assignee    User?        @relation("AssignedTo", fields: [assigneeId], references: [id])
-  createdBy   User         @relation("CreatedBy", fields: [createdById], references: [id])
-  parent      Task?        @relation("SubTasks", fields: [parentId], references: [id])
-  subtasks    Task[]       @relation("SubTasks")
-  attachments Attachment[]
-  comments    Comment[]
-
-  @@map("tasks")
-}
-
-model Member {
-  id        String      @id @default(cuid())
-  userId    String
-  projectId String
-  role      ProjectRole @default(MEMBER)
-  joinedAt  DateTime    @default(now())
-
-  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  pic     User    @relation(fields: [picId], references: [id])
 
-  @@unique([userId, projectId])
-  @@map("members")
+  @@map("hinanhyo_dr")
 }
 
-model Attachment {
+model ActivityLog {
   id        String   @id @default(cuid())
-  name      String
-  url       String
-  size      Int?
-  mimeType  String?
-  taskId    String
+  projectId String
+  userId    String
+  action    String
+  detail    String?  @db.Text
   createdAt DateTime @default(now())
 
-  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id])
 
-  @@map("attachments")
-}
-
-model Comment {
-  id        String   @id @default(cuid())
-  content   String   @db.Text
-  taskId    String
-  authorId  String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
-
-  @@map("comments")
-}
-
-enum Role {
-  ADMIN
-  MEMBER
-}
-
-enum ProjectRole {
-  LEADER
-  MEMBER
-}
-
-enum ProjectStatus {
-  ACTIVE
-  COMPLETED
-  ARCHIVED
-  ON_HOLD
-}
-
-enum TaskStatus {
-  TODO
-  IN_PROGRESS
-  DONE
-}
-
-enum Priority {
-  LOW
-  MEDIUM
-  HIGH
-  URGENT
+  @@map("activity_logs")
 }
