@@ -1,5 +1,7 @@
 "use client";
 
+import Image from "next/image";
+import logoCmw from "~/public/logo-cmw.png";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { signOut, useSession } from "next-auth/react";
@@ -41,12 +43,17 @@ export function Sidebar() {
       {/* Logo */}
       <div className="flex items-center h-16 px-4 border-b border-white/10 relative">
         {!collapsed && (
-          <div className="flex items-center gap-2">
-            <Building2 className="w-6 h-6 text-blue-400 shrink-0" />
-            <span className="font-bold text-sm">CMW Project</span>
+          <div className="flex items-center">
+            <div className="bg-white rounded-lg px-2 py-1">
+              <Image src={logoCmw} alt="CMW Logo" width={80} height={30} className="object-contain" />
+            </div>
           </div>
         )}
-        {collapsed && <Building2 className="w-6 h-6 text-blue-400 mx-auto" />}
+        {collapsed && (
+          <div className="bg-white rounded-lg p-1 mx-auto">
+            <Image src={logoCmw} alt="CMW Logo" width={28} height={28} className="object-contain" />
+          </div>
+        )}
         {/* Desktop collapse toggle */}
         <button
           onClick={() => setCollapsed(!collapsed)}
