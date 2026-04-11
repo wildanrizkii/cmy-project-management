@@ -1,12 +1,11 @@
 "use client";
 import { apiFetch } from "@/lib/fetch-client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { X, Plus, Save, Loader2, Download } from "lucide-react";
+import { X, Plus, Save, Loader2, Download, Check, Trash2, ChevronDown, ChevronRight, Edit2, ExternalLink, CheckCircle2 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { useToast } from "@/components/layout/toast-context";
-import { useSession } from "next-auth/react";
 import {
   formatDate,
   formatDateTime,
@@ -14,6 +13,8 @@ import {
   getPriorityColor,
   getFaseColor,
   getHinanhyoStatusColor,
+  computeProjectProgress,
+  computeFaseProgress,
 } from "@/lib/utils";
 import {
   STATUS_LABELS,
@@ -22,8 +23,9 @@ import {
   HINANHYO_STATUS_LABELS,
   HINANHYO_TYPE_LABELS,
   DEPARTMENT_LABELS,
+  FASE_ORDER,
 } from "@/types";
-import type { Project, HinanhyoDR, ActivityLog, Department, User } from "@/types";
+import type { Project, HinanhyoDR, HinanhyoDRType, HinanhyoDRStatus, ActivityLog, Department, User, ProjectFase, SubFase, FaseType } from "@/types";
 
 interface Props {
   project: Project;
@@ -31,12 +33,24 @@ interface Props {
   onUpdate: (p: Project) => void;
 }
 
-type Tab = "info" | "progress" | "hinanhyo" | "mp" | "aktivitas";
+type Tab = "info" | "phases" | "hinanhyo" | "mp" | "activity";
 
 export function ProjectDetailModal({ project, onClose, onUpdate }: Props) {
-  const { data: session } = useSession();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [tab, setTab] = useState<Tab>("info");
+
+  // Fetch full project detail
+  const { data: detail, refetch } = useQuery<Project>({
+    queryKey: ["project", project.id],
+    queryFn: () => apiFetch(`/api/projects/${project.id}`).then((r) => r.json()),
+    initialData: project,
+  });
+
+  const { data: users = [] } = useQuery<User[]>({
+    queryKey: ["users"],
+    queryFn: () => apiFetch("/api/users").then((r) => r.json()),
+  });
 
   const handleExport = async () => {
     const [detailRes, hinanhyoRes, activityRes] = await Promise.all([
@@ -47,156 +61,102 @@ export function ProjectDetailModal({ project, onClose, onUpdate }: Props) {
     const d = detailRes as Project;
     const wb = XLSX.utils.book_new();
 
-    // Sheet 1: Info Umum
     const info = [
-      ["Kode Proyek", d.code],
-      ["Nama Proyek", d.name],
+      ["Assy Number", d.assNumber],
+      ["Assy Name", d.assName],
+      ["Model", d.model],
       ["Customer", d.customer],
-      ["PIC", d.pic?.name ?? "-"],
-      ["Department", d.pic?.department ?? "-"],
-      ["Prioritas", PRIORITY_LABELS[d.priority]],
+      ["Project Leader", d.projectLeader?.name ?? "-"],
+      ["Priority", PRIORITY_LABELS[d.priority]],
       ["Status", STATUS_LABELS[d.status]],
-      ["Fase Saat Ini", FASE_LABELS[d.currentFase]],
-      ["Tanggal Mulai", formatDate(d.startDate)],
-      ["Deadline", formatDate(d.endDate)],
-      ["Deskripsi", d.description ?? "-"],
+      ["Current Phase", FASE_LABELS[d.currentFase]],
+      ["Start Date", formatDate(d.startDate)],
+      ["Target Date", formatDate(d.targetDate)],
+      ["Description", d.description ?? "-"],
     ];
-    XLSX.utils.book_append_sheet(
-      wb,
-      XLSX.utils.aoa_to_sheet(info),
-      "Info Umum",
-    );
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(info), "General Info");
 
-    // Sheet 2: Progress
-    const progress = [
-      ["Fase", "Progress (%)"],
-      ["RFQ", d.rfqProgress],
-      ["Die Go", d.dieGoProgress],
-      ["Event Project", d.eventProjectProgress],
-      ["Mass Pro", d.massProProgress],
-      ["Overall", Math.round(d.overallProgress)],
-    ];
-    XLSX.utils.book_append_sheet(
-      wb,
-      XLSX.utils.aoa_to_sheet(progress),
-      "Progress",
-    );
-
-    // Sheet 3: MP & Cycle Time
-    const mp = [
-      ["Item", "Nilai"],
-      ["Kebutuhan MP (orang)", d.kebutuhanMp],
-      ["Aktual MP (orang)", d.aktualMp ?? "-"],
-      ["Cycle Time Target (hari)", d.cycleTimeTarget],
-      ["Cycle Time Aktual (hari)", d.cycleTimeAktual ?? "-"],
-    ];
-    XLSX.utils.book_append_sheet(
-      wb,
-      XLSX.utils.aoa_to_sheet(mp),
-      "MP & Cycle Time",
-    );
-
-    // Sheet 4: Hinanhyo & DR
     if (hinanhyoRes.length > 0) {
       const rows = (hinanhyoRes as HinanhyoDR[]).map((h) => ({
-        Tipe: HINANHYO_TYPE_LABELS[h.type],
-        Judul: h.title,
-        Deskripsi: h.description ?? "-",
+        Type: HINANHYO_TYPE_LABELS[h.type],
+        Title: h.title,
+        Description: h.description ?? "-",
+        "SubPhase": h.subFase?.name ?? "-",
         Status: HINANHYO_STATUS_LABELS[h.status],
-        Dibuat: formatDate(h.createdAt),
+        Created: formatDate(h.createdAt),
       }));
-      XLSX.utils.book_append_sheet(
-        wb,
-        XLSX.utils.json_to_sheet(rows),
-        "Hinanhyo & DR",
-      );
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), "Hinanhyo & DR");
     }
 
-    // Sheet 5: Aktivitas
     if (activityRes.length > 0) {
       const rows = (activityRes as ActivityLog[]).map((a) => ({
-        Tanggal: formatDate(a.createdAt),
-        User:
-          (a as ActivityLog & { user?: { name: string } }).user?.name ?? "-",
-        Aksi: a.action,
+        Date: formatDateTime(a.createdAt),
+        User: (a as ActivityLog & { user?: { name: string } }).user?.name ?? "-",
+        Action: a.action,
         Detail: a.detail ?? "-",
       }));
-      XLSX.utils.book_append_sheet(
-        wb,
-        XLSX.utils.json_to_sheet(rows),
-        "Riwayat Aktivitas",
-      );
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), "Activity Log");
     }
 
-    XLSX.writeFile(wb, `${d.code}-${d.name.replace(/\s+/g, "-")}.xlsx`);
+    XLSX.writeFile(wb, `${d.assNumber}-${d.assName.replace(/\s+/g, "-")}.xlsx`);
   };
 
-  const isAtasan = session?.user?.role === "ATASAN";
-  const isPIC = project.picId === session?.user?.id;
-  const canEdit = isAtasan || isPIC;
-
-  // Fetch full project detail
-  const { data: detail } = useQuery<Project>({
-    queryKey: ["project", project.id],
-    queryFn: () => apiFetch(`/api/projects/${project.id}`).then((r) => r.json()),
-    initialData: project,
-  });
-
   const tabs: { id: Tab; label: string }[] = [
-    { id: "info", label: "Informasi Umum" },
-    { id: "progress", label: "Progress & Fase" },
-    { id: "hinanhyo", label: "Hinanhyo & DR" },
-    { id: "mp", label: "MP & Cycle Time" },
-    { id: "aktivitas", label: "Riwayat Aktivitas" },
+    { id: "info", label: "General Info" },
+    { id: "phases", label: "Phases & SubPhases" },
+    { id: "hinanhyo", label: "Hinanhyo / DR" },
+    { id: "mp", label: "Manpower" },
+    { id: "activity", label: "Activity Log" },
   ];
+
+  const overallProgress = computeProjectProgress(detail.fases ?? []);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div
-        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-        onClick={onClose}
-      />
-      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col">
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[92vh] flex flex-col">
         {/* Header */}
         <div className="flex items-start justify-between px-6 py-5 border-b border-gray-100">
-          <div>
-            <div className="flex items-center gap-3 mb-1">
-              <span className="font-mono text-sm text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
-                {detail?.code}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-3 flex-wrap">
+              <span className="font-mono text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded font-medium">{detail.assNumber}</span>
+              <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium border ${getStatusColor(detail.status)}`}>
+                {STATUS_LABELS[detail.status]}
               </span>
-              <span
-                className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium border ${getStatusColor(detail?.status ?? "BELUM_MULAI")}`}
-              >
-                {STATUS_LABELS[detail?.status ?? "BELUM_MULAI"]}
-              </span>
-              <span
-                className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium border ${getPriorityColor(detail?.priority ?? "MEDIUM")}`}
-              >
-                {PRIORITY_LABELS[detail?.priority ?? "MEDIUM"]}
+              <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${getFaseColor(detail.currentFase)}`}>
+                {FASE_LABELS[detail.currentFase]}
               </span>
             </div>
-            <h2 className="text-lg font-bold text-gray-900">{detail?.name}</h2>
+            <h2 className="text-lg font-bold text-gray-900 mt-1.5 truncate">{detail.assName}</h2>
+            <p className="text-sm text-gray-500">{detail.model} — {detail.customer}</p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 ml-4 shrink-0">
             <button
               onClick={handleExport}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-600 border border-gray-200 hover:bg-gray-50 rounded-lg transition-colors"
-              title="Export ke Excel"
+              className="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg"
+              title="Export Excel"
             >
               <Download className="w-4 h-4" />
-              Export
             </button>
-            <button
-              onClick={onClose}
-              className="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-            >
+            <button onClick={onClose} className="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg">
               <X className="w-5 h-5" />
             </button>
           </div>
         </div>
 
+        {/* Progress bar */}
+        <div className="px-6 py-3 border-b border-gray-100 bg-gray-50">
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-gray-500 font-medium w-24">Overall Progress</span>
+            <div className="flex-1 h-2 bg-gray-200 rounded-full">
+              <div className="h-2 bg-blue-500 rounded-full transition-all" style={{ width: `${overallProgress}%` }} />
+            </div>
+            <span className="text-xs font-bold text-gray-700 w-10 text-right">{overallProgress}%</span>
+          </div>
+        </div>
+
         {/* Tabs */}
-        <div className="flex border-b border-gray-100 px-6 overflow-x-auto shrink-0">
+        <div className="flex border-b border-gray-100 px-6 overflow-x-auto">
           {tabs.map((t) => (
             <button
               key={t.id}
@@ -212,1017 +172,1041 @@ export function ProjectDetailModal({ project, onClose, onUpdate }: Props) {
           ))}
         </div>
 
-        {/* Tab Content */}
+        {/* Content */}
         <div className="flex-1 overflow-y-auto p-6">
-          {tab === "info" && (
-            <InfoTab
-              detail={detail}
-              canEdit={canEdit}
-              isAtasan={isAtasan}
-              onUpdate={onUpdate}
-              toast={toast}
-            />
-          )}
-          {tab === "progress" && (
-            <ProgressTab
-              detail={detail}
-              canEdit={canEdit}
-              onUpdate={onUpdate}
-              toast={toast}
-            />
-          )}
-          {tab === "hinanhyo" && (
-            <HinanhyoTab projectId={project.id} canEdit={canEdit} toast={toast} />
-          )}
-          {tab === "mp" && (
-            <MPTab detail={detail} canEdit={canEdit} onUpdate={onUpdate} toast={toast} />
-          )}
-          {tab === "aktivitas" && <AktivitasTab projectId={project.id} />}
+          {tab === "info" && <InfoTab detail={detail} users={users} onUpdate={onUpdate} toast={toast} refetch={refetch} />}
+          {tab === "phases" && <PhasesTab detail={detail} users={users} toast={toast} refetch={refetch} queryClient={queryClient} onUpdate={onUpdate} />}
+          {tab === "hinanhyo" && <HinanhyoTab detail={detail} toast={toast} refetch={refetch} />}
+          {tab === "mp" && <ManpowerTab detail={detail} onUpdate={onUpdate} toast={toast} refetch={refetch} />}
+          {tab === "activity" && <ActivityTab detail={detail} />}
         </div>
       </div>
     </div>
   );
 }
 
-// ─── Tab 1: Info ─────────────────────────────────────────────────────────────
-function InfoTab({
-  detail,
-  canEdit,
-  isAtasan,
-  onUpdate,
-  toast,
-}: {
-  detail: Project | undefined;
-  canEdit: boolean;
-  isAtasan: boolean;
+// ─── Info Tab ────────────────────────────────────────────────────────────────
+
+function InfoTab({ detail, users, onUpdate, toast, refetch }: {
+  detail: Project;
+  users: User[];
   onUpdate: (p: Project) => void;
-  toast: (type: "success" | "error", message: string) => void;
+  toast: (type: "success" | "error", msg: string) => void;
+  refetch: () => void;
 }) {
   const [editing, setEditing] = useState(false);
-  const [showTundaConfirm, setShowTundaConfirm] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
-    name: detail?.name ?? "",
-    customer: detail?.customer ?? "",
-    picId: detail?.picId ?? "",
-    priority: detail?.priority ?? "MEDIUM",
-    startDate: detail?.startDate ? detail.startDate.slice(0, 10) : "",
-    endDate: detail?.endDate ? detail.endDate.slice(0, 10) : "",
-    kebutuhanMp: String(detail?.kebutuhanMp ?? ""),
-    cycleTimeTarget: String(detail?.cycleTimeTarget ?? ""),
-    description: detail?.description ?? "",
-    status: detail?.status ?? "BELUM_MULAI",
+    model: detail.model,
+    assName: detail.assName,
+    customer: detail.customer,
+    description: detail.description ?? "",
+    projectLeaderId: detail.projectLeaderId,
+    priority: detail.priority,
+    status: detail.status,
+    currentFase: detail.currentFase,
+    startDate: detail.startDate?.slice(0, 10) ?? "",
+    targetDate: detail.targetDate?.slice(0, 10) ?? "",
   });
-  const [saving, setSaving] = useState(false);
+  const [showTundaConfirm, setShowTundaConfirm] = useState(false);
 
-  const { data: bawahanList = [] } = useQuery<User[]>({
-    queryKey: ["users", "BAWAHAN"],
-    queryFn: () => apiFetch("/api/users?role=BAWAHAN").then((r) => r.json()),
-    enabled: editing && isAtasan,
-  });
-
-  const handleSave = async () => {
-    setSaving(true);
-    const payload: Record<string, unknown> = { description: form.description, status: form.status };
-    if (isAtasan) {
-      payload.name = form.name;
-      payload.customer = form.customer;
-      payload.picId = form.picId;
-      payload.priority = form.priority;
-      payload.startDate = form.startDate;
-      payload.endDate = form.endDate;
-      payload.kebutuhanMp = parseInt(form.kebutuhanMp);
-      payload.cycleTimeTarget = parseInt(form.cycleTimeTarget);
-    }
-    const res = await apiFetch(`/api/projects/${detail?.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    const updated = await res.json();
-    setSaving(false);
-    if (!res.ok) {
-      toast("error", updated.error ?? "Gagal menyimpan perubahan");
-      return;
-    }
-    onUpdate(updated);
-    setEditing(false);
-    toast("success", "Informasi proyek berhasil disimpan");
-  };
-
-  const handleTunda = async () => {
-    const res = await apiFetch(`/api/projects/${detail?.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: "TUNDA" }),
-    });
-    const updated = await res.json();
-    setShowTundaConfirm(false);
-    if (!res.ok) {
-      toast("error", updated.error ?? "Gagal menunda proyek");
-      return;
-    }
-    onUpdate(updated);
-    toast("success", "Proyek ditandai sebagai Tunda");
-  };
-
-  if (!detail) return null;
-
-  return (
-    <div className="space-y-5">
-      {/* Action buttons */}
-      <div className="flex items-center justify-between">
-        <div className="flex gap-2">
-          {canEdit && !editing && (
-            <button
-              onClick={() => {
-                setForm({
-                  name: detail.name,
-                  customer: detail.customer,
-                  picId: detail.picId,
-                  priority: detail.priority,
-                  startDate: detail.startDate.slice(0, 10),
-                  endDate: detail.endDate.slice(0, 10),
-                  kebutuhanMp: String(detail.kebutuhanMp),
-                  cycleTimeTarget: String(detail.cycleTimeTarget),
-                  description: detail.description ?? "",
-                  status: detail.status,
-                });
-                setEditing(true);
-              }}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-blue-600 border border-blue-200 hover:bg-blue-50 rounded-lg transition-colors"
-            >
-              Edit Proyek
-            </button>
-          )}
-        </div>
-        {isAtasan && !editing && detail.status !== "TUNDA" && detail.status !== "SELESAI" && (
-          <button
-            onClick={() => setShowTundaConfirm(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-orange-600 border border-orange-200 hover:bg-orange-50 rounded-lg transition-colors"
-          >
-            Tunda Proyek
-          </button>
-        )}
-        {isAtasan && !editing && detail.status === "TUNDA" && (
-          <button
-            onClick={() => {
-              setForm({ ...form, status: "DALAM_PROSES" });
-              setEditing(true);
-            }}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-blue-600 border border-blue-200 hover:bg-blue-50 rounded-lg transition-colors"
-          >
-            Aktifkan Kembali
-          </button>
-        )}
-      </div>
-
-      {/* Read-only view */}
-      {!editing && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Field label="Nama Proyek" value={detail.name} />
-          <Field label="Customer" value={detail.customer} />
-          <Field
-            label="PIC"
-            value={`${detail.pic?.name} (${DEPARTMENT_LABELS[detail.pic?.department as Department] ?? "-"})`}
-          />
-          <Field
-            label="Prioritas"
-            value={
-              <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium border ${getPriorityColor(detail.priority)}`}>
-                {PRIORITY_LABELS[detail.priority]}
-              </span>
-            }
-          />
-          <Field label="Tanggal Mulai" value={formatDate(detail.startDate)} />
-          <Field label="Tanggal Berakhir" value={formatDate(detail.endDate)} />
-          <Field label="Kebutuhan MP" value={`${detail.kebutuhanMp} orang`} />
-          <Field label="Cycle Time Target" value={`${detail.cycleTimeTarget} hari kerja`} />
-          <Field
-            label="Fase Aktif"
-            value={
-              <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${getFaseColor(detail.currentFase)}`}>
-                {FASE_LABELS[detail.currentFase]}
-              </span>
-            }
-          />
-          <Field
-            label="Progress Keseluruhan"
-            value={
-              <div className="flex items-center gap-2">
-                <div className="flex-1 h-2 bg-gray-200 rounded-full">
-                  <div className="h-2 bg-blue-500 rounded-full" style={{ width: `${detail.overallProgress}%` }} />
-                </div>
-                <span className="text-sm font-bold text-blue-600">{Math.round(detail.overallProgress)}%</span>
-              </div>
-            }
-          />
-        </div>
-      )}
-
-      {/* Description (read-only) */}
-      {!editing && (
-        <div>
-          <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider block mb-2">Deskripsi</label>
-          <p className="text-sm text-gray-700 leading-relaxed bg-gray-50 rounded-lg p-3">
-            {detail.description ?? "Tidak ada deskripsi"}
-          </p>
-        </div>
-      )}
-
-      {/* Edit form */}
-      {editing && (
-        <div className="space-y-4 border border-blue-100 bg-blue-50/30 rounded-xl p-4">
-          <h3 className="text-sm font-semibold text-gray-800">Edit Informasi Proyek</h3>
-
-          {isAtasan && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs font-medium text-gray-600 mb-1 block">Nama Proyek *</label>
-                <input
-                  value={form.name}
-                  onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              <div>
-                <label className="text-xs font-medium text-gray-600 mb-1 block">Customer *</label>
-                <input
-                  value={form.customer}
-                  onChange={(e) => setForm({ ...form, customer: e.target.value })}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              <div>
-                <label className="text-xs font-medium text-gray-600 mb-1 block">PIC *</label>
-                <select
-                  value={form.picId}
-                  onChange={(e) => setForm({ ...form, picId: e.target.value })}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value={detail.picId}>{detail.pic?.name}</option>
-                  {bawahanList.filter((u) => u.id !== detail.picId).map((u) => (
-                    <option key={u.id} value={u.id}>{u.name} — {DEPARTMENT_LABELS[u.department as Department] ?? u.department}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="text-xs font-medium text-gray-600 mb-1 block">Prioritas</label>
-                <select
-                  value={form.priority}
-                  onChange={(e) => setForm({ ...form, priority: e.target.value as typeof form.priority })}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="HIGH">High</option>
-                  <option value="MEDIUM">Medium</option>
-                  <option value="LOW">Low</option>
-                </select>
-              </div>
-              <div>
-                <label className="text-xs font-medium text-gray-600 mb-1 block">Tanggal Mulai *</label>
-                <input
-                  type="date"
-                  value={form.startDate}
-                  onChange={(e) => setForm({ ...form, startDate: e.target.value })}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              <div>
-                <label className="text-xs font-medium text-gray-600 mb-1 block">Tanggal Berakhir *</label>
-                <input
-                  type="date"
-                  min={form.startDate}
-                  value={form.endDate}
-                  onChange={(e) => setForm({ ...form, endDate: e.target.value })}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              <div>
-                <label className="text-xs font-medium text-gray-600 mb-1 block">Kebutuhan MP (orang) *</label>
-                <input
-                  type="number"
-                  min="1"
-                  value={form.kebutuhanMp}
-                  onChange={(e) => setForm({ ...form, kebutuhanMp: e.target.value })}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              <div>
-                <label className="text-xs font-medium text-gray-600 mb-1 block">Cycle Time Target (hari kerja) *</label>
-                <input
-                  type="number"
-                  min="1"
-                  value={form.cycleTimeTarget}
-                  onChange={(e) => setForm({ ...form, cycleTimeTarget: e.target.value })}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-            </div>
-          )}
-
-          <div>
-            <label className="text-xs font-medium text-gray-600 mb-1 block">Deskripsi</label>
-            <textarea
-              value={form.description}
-              onChange={(e) => setForm({ ...form, description: e.target.value })}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-20"
-            />
-          </div>
-
-          <div>
-            <label className="text-xs font-medium text-gray-600 mb-1 block">Status</label>
-            <select
-              value={form.status}
-              onChange={(e) => setForm({ ...form, status: e.target.value as typeof form.status })}
-              className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              {Object.entries(STATUS_LABELS).map(([k, v]) => (
-                <option key={k} value={k}>{v}</option>
-              ))}
-            </select>
-          </div>
-
-          <div className="flex gap-2 pt-1">
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 disabled:opacity-50"
-            >
-              {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
-              Simpan
-            </button>
-            <button
-              onClick={() => setEditing(false)}
-              className="px-4 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50"
-            >
-              Batal
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Hinanhyo count */}
-      {(detail._count?.hinanhyoDRs ?? 0) > 0 && (
-        <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 text-sm text-orange-800">
-          Total {detail._count?.hinanhyoDRs} item Hinanhyo & DR — lihat tab Hinanhyo & DR.
-        </div>
-      )}
-
-      {/* Tunda confirmation */}
-      {showTundaConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setShowTundaConfirm(false)} />
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
-            <h3 className="text-base font-bold text-gray-900 mb-2">Tunda proyek ini?</h3>
-            <p className="text-sm text-gray-500 mb-5">
-              Proyek <span className="font-medium text-gray-800">{detail.name}</span> akan ditandai sebagai <span className="font-semibold text-orange-600">Tunda</span>. Anda bisa mengaktifkannya kembali kapan saja.
-            </p>
-            <div className="flex gap-3">
-              <button
-                onClick={handleTunda}
-                className="flex-1 py-2.5 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-sm font-medium transition-colors"
-              >
-                Ya, Tunda
-              </button>
-              <button
-                onClick={() => setShowTundaConfirm(false)}
-                className="flex-1 py-2.5 border border-gray-200 hover:bg-gray-50 text-gray-600 rounded-lg text-sm font-medium transition-colors"
-              >
-                Batal
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── Tab 2: Progress ──────────────────────────────────────────────────────────
-function ProgressTab({
-  detail,
-  canEdit,
-  onUpdate,
-  toast,
-}: {
-  detail: Project | undefined;
-  canEdit: boolean;
-  onUpdate: (p: Project) => void;
-  toast: (type: "success" | "error", message: string) => void;
-}) {
-  const [rfq, setRfq] = useState(detail?.rfqProgress ?? 0);
-  const [dieGo, setDieGo] = useState(detail?.dieGoProgress ?? 0);
-  const [event, setEvent] = useState(detail?.eventProjectProgress ?? 0);
-  const [massPro, setMassPro] = useState(detail?.massProProgress ?? 0);
-  const [saving, setSaving] = useState(false);
-
-  if (!detail) return null;
-
-  const overall = Math.round((rfq + dieGo + event + massPro) / 4);
-
-  const handleSave = async () => {
+  const save = async () => {
     setSaving(true);
     const res = await apiFetch(`/api/projects/${detail.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        rfqProgress: rfq,
-        dieGoProgress: dieGo,
-        eventProjectProgress: event,
-        massProProgress: massPro,
-      }),
-    });
-    const updated = await res.json();
-    setSaving(false);
-    if (!res.ok) {
-      toast("error", updated.error ?? "Gagal menyimpan progress");
-      return;
-    }
-    onUpdate(updated);
-    toast("success", "Progress proyek berhasil disimpan");
-  };
-
-  const phases = [
-    { label: "RFQ", value: rfq, set: setRfq, locked: false },
-    { label: "Die Go", value: dieGo, set: setDieGo, locked: rfq < 100 },
-    {
-      label: "Event Project",
-      value: event,
-      set: setEvent,
-      locked: dieGo < 100,
-    },
-    { label: "Mass Pro", value: massPro, set: setMassPro, locked: event < 100 },
-  ];
-
-  return (
-    <div className="space-y-6">
-      {/* Overall */}
-      <div className="bg-blue-50 rounded-xl p-4">
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-sm font-semibold text-blue-900">
-            Progress Keseluruhan
-          </span>
-          <span className="text-2xl font-bold text-blue-600">{overall}%</span>
-        </div>
-        <div className="h-3 bg-blue-200 rounded-full">
-          <div
-            className="h-3 bg-blue-600 rounded-full transition-all"
-            style={{ width: `${overall}%` }}
-          />
-        </div>
-      </div>
-
-      {/* Phase Bars */}
-      <div className="space-y-4">
-        {phases.map(({ label, value, set, locked }) => (
-          <div key={label} className={locked ? "opacity-50" : ""}>
-            <div className="flex items-center justify-between mb-1.5">
-              <span className="text-sm font-medium text-gray-700">{label}</span>
-              <div className="flex items-center gap-2">
-                {locked && (
-                  <span className="text-xs text-gray-400 italic">
-                    Terkunci — fase sebelumnya belum 100%
-                  </span>
-                )}
-                <span className="text-sm font-bold text-gray-700">
-                  {value}%
-                </span>
-              </div>
-            </div>
-            <div className="relative">
-              <div className="h-3 bg-gray-200 rounded-full">
-                <div
-                  className="h-3 bg-green-500 rounded-full transition-all"
-                  style={{ width: `${value}%` }}
-                />
-              </div>
-              {canEdit && !locked && (
-                <input
-                  type="range"
-                  min="0"
-                  max="100"
-                  value={value}
-                  onChange={(e) => set(Number(e.target.value))}
-                  className="absolute inset-0 w-full opacity-0 cursor-pointer h-3"
-                />
-              )}
-            </div>
-            {canEdit && !locked && (
-              <input
-                type="number"
-                min="0"
-                max="100"
-                value={value}
-                onChange={(e) =>
-                  set(Math.min(100, Math.max(0, Number(e.target.value))))
-                }
-                className="mt-1.5 w-20 border border-gray-200 rounded px-2 py-1 text-xs text-right focus:outline-none focus:ring-1 focus:ring-blue-500"
-              />
-            )}
-          </div>
-        ))}
-      </div>
-
-      {canEdit && (
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 disabled:opacity-50 transition-colors"
-        >
-          {saving ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
-          ) : (
-            <Save className="w-4 h-4" />
-          )}
-          Simpan Progress
-        </button>
-      )}
-    </div>
-  );
-}
-
-// ─── Tab 3: Hinanhyo & DR ─────────────────────────────────────────────────────
-function HinanhyoTab({
-  projectId,
-  canEdit,
-  toast,
-}: {
-  projectId: string;
-  canEdit: boolean;
-  toast: (type: "success" | "error", message: string) => void;
-}) {
-  const [filterType, setFilterType] = useState("");
-  const [filterStatus, setFilterStatus] = useState("");
-  const [showAdd, setShowAdd] = useState(false);
-  const [form, setForm] = useState({
-    type: "HINANHYO",
-    title: "",
-    description: "",
-    status: "PENDING",
-  });
-  const [saving, setSaving] = useState(false);
-  const queryClient = useQueryClient();
-
-  const { data: items = [], isLoading } = useQuery<HinanhyoDR[]>({
-    queryKey: ["hinanhyo", projectId],
-    queryFn: () =>
-      apiFetch(`/api/projects/${projectId}/hinanhyo`).then((r) => r.json()),
-  });
-
-  const filtered = items.filter((item) => {
-    if (filterType && item.type !== filterType) return false;
-    if (filterStatus && item.status !== filterStatus) return false;
-    return true;
-  });
-
-  const handleAdd = async () => {
-    if (!form.title) return;
-    setSaving(true);
-    const res = await apiFetch(`/api/projects/${projectId}/hinanhyo`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(form),
     });
+    const data = await res.json();
     setSaving(false);
-    if (!res.ok) {
-      toast("error", "Gagal menambahkan item");
-      return;
-    }
-    queryClient.invalidateQueries({ queryKey: ["hinanhyo", projectId] });
-    setForm({ type: "HINANHYO", title: "", description: "", status: "PENDING" });
-    setShowAdd(false);
-    toast("success", "Item berhasil ditambahkan");
+    if (!res.ok) { toast("error", data.error ?? "Update failed"); return; }
+    toast("success", "Project updated");
+    onUpdate(data);
+    setEditing(false);
+    refetch();
   };
 
-  const handleStatusChange = async (id: string, status: string) => {
-    const res = await apiFetch(`/api/hinanhyo/${id}`, {
+  const setStatus = async (status: string) => {
+    const res = await apiFetch(`/api/projects/${detail.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status }),
     });
-    if (!res.ok) {
-      toast("error", "Gagal mengubah status");
-      return;
-    }
-    queryClient.invalidateQueries({ queryKey: ["hinanhyo", projectId] });
-    toast("success", `Status diperbarui ke ${HINANHYO_STATUS_LABELS[status as keyof typeof HINANHYO_STATUS_LABELS]}`);
+    const data = await res.json();
+    if (!res.ok) { toast("error", data.error ?? "Update failed"); return; }
+    toast("success", `Status changed to ${STATUS_LABELS[status as keyof typeof STATUS_LABELS]}`);
+    onUpdate(data);
+    refetch();
+  };
+
+  if (!editing) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <h3 className="font-semibold text-gray-800">Project Information</h3>
+          <div className="flex gap-2">
+            {detail.status === "TUNDA" ? (
+              <button
+                onClick={() => setStatus("DALAM_PROSES")}
+                className="px-3 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"
+              >
+                Reactivate
+              </button>
+            ) : detail.status !== "SELESAI" && (
+              <button
+                onClick={() => setShowTundaConfirm(true)}
+                className="px-3 py-1.5 text-xs font-medium text-orange-600 bg-orange-50 hover:bg-orange-100 rounded-lg transition-colors"
+              >
+                Put On Hold
+              </button>
+            )}
+            <button
+              onClick={() => setEditing(true)}
+              className="px-3 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"
+            >
+              Edit
+            </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          {[
+            ["Model", detail.model],
+            ["Assy Number", detail.assNumber],
+            ["Assy Name", detail.assName],
+            ["Customer", detail.customer],
+            ["Project Leader", detail.projectLeader?.name ?? "-"],
+            ["Priority", PRIORITY_LABELS[detail.priority]],
+            ["Status", STATUS_LABELS[detail.status]],
+            ["Current Phase", FASE_LABELS[detail.currentFase]],
+            ["Start Date", formatDate(detail.startDate)],
+            ["Target Date", formatDate(detail.targetDate)],
+          ].map(([label, value]) => (
+            <div key={label} className="bg-gray-50 rounded-lg p-3">
+              <p className="text-xs font-medium text-gray-500 mb-1">{label}</p>
+              <p className="text-sm font-medium text-gray-900">{value}</p>
+            </div>
+          ))}
+          {detail.description && (
+            <div className="col-span-2 bg-gray-50 rounded-lg p-3">
+              <p className="text-xs font-medium text-gray-500 mb-1">Description</p>
+              <p className="text-sm text-gray-700 whitespace-pre-wrap">{detail.description}</p>
+            </div>
+          )}
+        </div>
+
+        {showTundaConfirm && (
+          <div className="fixed inset-0 z-60 flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/40" onClick={() => setShowTundaConfirm(false)} />
+            <div className="relative bg-white rounded-xl shadow-xl p-6 max-w-sm w-full">
+              <h4 className="font-bold text-gray-900 mb-2">Put project on hold?</h4>
+              <p className="text-sm text-gray-500 mb-4">This project will be marked as On Hold and can be reactivated later.</p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => { setShowTundaConfirm(false); setStatus("TUNDA"); }}
+                  className="flex-1 py-2 bg-orange-600 text-white rounded-lg text-sm font-medium"
+                >
+                  Confirm
+                </button>
+                <button onClick={() => setShowTundaConfirm(false)} className="flex-1 py-2 border border-gray-200 rounded-lg text-sm">Cancel</button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between mb-2">
+        <h3 className="font-semibold text-gray-800">Edit Project</h3>
+        <div className="flex gap-2">
+          <button
+            onClick={save}
+            disabled={saving}
+            className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
+          >
+            {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+            Save
+          </button>
+          <button onClick={() => setEditing(false)} className="px-4 py-2 border border-gray-200 rounded-lg text-sm text-gray-600">Cancel</button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="block text-xs font-semibold text-gray-600 mb-1">Model</label>
+          <input value={form.model} onChange={(e) => setForm({ ...form, model: e.target.value })}
+            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        </div>
+        <div>
+          <label className="block text-xs font-semibold text-gray-600 mb-1">Assy Name</label>
+          <input value={form.assName} onChange={(e) => setForm({ ...form, assName: e.target.value })}
+            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        </div>
+        <div>
+          <label className="block text-xs font-semibold text-gray-600 mb-1">Customer</label>
+          <input value={form.customer} onChange={(e) => setForm({ ...form, customer: e.target.value })}
+            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        </div>
+        <div>
+          <label className="block text-xs font-semibold text-gray-600 mb-1">Project Leader</label>
+          <select value={form.projectLeaderId} onChange={(e) => setForm({ ...form, projectLeaderId: e.target.value })}
+            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+            {users.map((u) => (
+              <option key={u.id} value={u.id}>{u.name} — {DEPARTMENT_LABELS[u.department!] ?? u.role}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs font-semibold text-gray-600 mb-1">Priority</label>
+          <select value={form.priority} onChange={(e) => setForm({ ...form, priority: e.target.value as Project["priority"] })}
+            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <option value="HIGH">High</option>
+            <option value="MEDIUM">Medium</option>
+            <option value="LOW">Low</option>
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs font-semibold text-gray-600 mb-1">Status</label>
+          <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value as Project["status"] })}
+            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+            {Object.entries(STATUS_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs font-semibold text-gray-600 mb-1">Current Phase</label>
+          <select value={form.currentFase} onChange={(e) => setForm({ ...form, currentFase: e.target.value as FaseType })}
+            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+            {Object.entries(FASE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs font-semibold text-gray-600 mb-1">Start Date</label>
+          <input type="date" value={form.startDate} onChange={(e) => setForm({ ...form, startDate: e.target.value })}
+            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        </div>
+        <div>
+          <label className="block text-xs font-semibold text-gray-600 mb-1">Target Date</label>
+          <input type="date" value={form.targetDate} onChange={(e) => setForm({ ...form, targetDate: e.target.value })}
+            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        </div>
+        <div className="col-span-2">
+          <label className="block text-xs font-semibold text-gray-600 mb-1">Description</label>
+          <textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })}
+            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-20" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Phases Tab ───────────────────────────────────────────────────────────────
+
+function PhasesTab({ detail, users, toast, refetch, queryClient, onUpdate }: {
+  detail: Project;
+  users: User[];
+  toast: (type: "success" | "error", msg: string) => void;
+  refetch: () => void;
+  queryClient: ReturnType<typeof useQueryClient>;
+  onUpdate: (p: Project) => void;
+}) {
+  const fases = detail.fases ?? [];
+  const orderedFases = FASE_ORDER.map((f) => fases.find((pf) => pf.fase === f)).filter(Boolean) as ProjectFase[];
+
+  const overallProgress = computeProjectProgress(fases);
+  const allDone = overallProgress === 100 && detail.status !== "SELESAI";
+
+  const markComplete = async () => {
+    const res = await apiFetch(`/api/projects/${detail.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "SELESAI" }),
+    });
+    const data = await res.json();
+    if (!res.ok) { toast("error", data.error ?? "Update failed"); return; }
+    toast("success", "Project marked as Completed!");
+    onUpdate(data);
+    refetch();
   };
 
   return (
     <div className="space-y-4">
-      {/* Filters + Add */}
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex gap-2">
-          <select
-            value={filterType}
-            onChange={(e) => setFilterType(e.target.value)}
-            className="border border-gray-200 rounded-lg px-2 py-1.5 text-sm"
-          >
-            <option value="">Semua Jenis</option>
-            <option value="HINANHYO">Hinanhyo</option>
-            <option value="DR">Design Review</option>
-          </select>
-          <select
-            value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value)}
-            className="border border-gray-200 rounded-lg px-2 py-1.5 text-sm"
-          >
-            <option value="">Semua Status</option>
-            {Object.entries(HINANHYO_STATUS_LABELS).map(([k, v]) => (
-              <option key={k} value={k}>
-                {v}
-              </option>
-            ))}
-          </select>
-        </div>
-        {canEdit && (
-          <button
-            onClick={() => setShowAdd(!showAdd)}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition-colors"
-          >
-            <Plus className="w-4 h-4" />
-            Tambah
+      {allDone && (
+        <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <CheckCircle2 className="w-5 h-5 text-green-600 shrink-0" />
+            <div>
+              <p className="text-sm font-semibold text-green-800">All SubPhases completed!</p>
+              <p className="text-xs text-green-600">Would you like to mark this project as Completed?</p>
+            </div>
+          </div>
+          <button onClick={markComplete} className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium">
+            Mark Complete
           </button>
-        )}
-      </div>
-
-      {/* Add Form */}
-      {showAdd && (
-        <div className="border border-blue-200 bg-blue-50 rounded-xl p-4 space-y-3">
-          <h3 className="text-sm font-semibold text-blue-900">
-            Tambah Hinanhyo / DR
-          </h3>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs font-medium text-gray-600 mb-1 block">
-                Jenis
-              </label>
-              <select
-                value={form.type}
-                onChange={(e) => setForm({ ...form, type: e.target.value })}
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
-              >
-                <option value="HINANHYO">Hinanhyo</option>
-                <option value="DR">Design Review</option>
-              </select>
-            </div>
-            <div>
-              <label className="text-xs font-medium text-gray-600 mb-1 block">
-                Status Awal
-              </label>
-              <select
-                value={form.status}
-                onChange={(e) => setForm({ ...form, status: e.target.value })}
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
-              >
-                {Object.entries(HINANHYO_STATUS_LABELS).map(([k, v]) => (
-                  <option key={k} value={k}>
-                    {v}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-          <div>
-            <label className="text-xs font-medium text-gray-600 mb-1 block">
-              Judul *
-            </label>
-            <input
-              value={form.title}
-              onChange={(e) => setForm({ ...form, title: e.target.value })}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="Judul temuan..."
-            />
-          </div>
-          <div>
-            <label className="text-xs font-medium text-gray-600 mb-1 block">
-              Deskripsi
-            </label>
-            <textarea
-              value={form.description}
-              onChange={(e) =>
-                setForm({ ...form, description: e.target.value })
-              }
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-16"
-              placeholder="Deskripsi detail..."
-            />
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={handleAdd}
-              disabled={saving || !form.title}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded-lg text-sm disabled:opacity-50 hover:bg-blue-700"
-            >
-              {saving ? (
-                <Loader2 className="w-3 h-3 animate-spin" />
-              ) : (
-                <Save className="w-3 h-3" />
-              )}
-              Simpan
-            </button>
-            <button
-              onClick={() => setShowAdd(false)}
-              className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-white"
-            >
-              Batal
-            </button>
-          </div>
         </div>
       )}
+      {orderedFases.map((fase) => (
+        <FaseSection key={fase.id} fase={fase} users={users} projectId={detail.id} toast={toast} refetch={refetch} />
+      ))}
+    </div>
+  );
+}
 
-      {/* Table */}
-      {isLoading ? (
-        <div className="py-8 text-center text-gray-400 text-sm">Memuat...</div>
-      ) : filtered.length === 0 ? (
-        <div className="py-8 text-center text-gray-400 text-sm">
-          Tidak ada data Hinanhyo & DR
+function FaseSection({ fase, users, projectId, toast, refetch }: {
+  fase: ProjectFase;
+  users: User[];
+  projectId: string;
+  toast: (type: "success" | "error", msg: string) => void;
+  refetch: () => void;
+}) {
+  const [expanded, setExpanded] = useState(fase.fase === "RFQ" || fase.fase === "DIE_GO");
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [addForm, setAddForm] = useState({ name: "", description: "", picId: "", picStartDate: "", picTargetDate: "", customerStartDate: "", customerTargetDate: "", documentUrl: "" });
+  const [saving, setSaving] = useState(false);
+  const importInputRef = useRef<HTMLInputElement | null>(null);
+
+  const downloadTemplate = () => {
+    const headers = [["Name", "PIC Email", "PIC Start Date", "PIC Target Date", "Customer Start Date", "Customer Target Date", "Document URL", "Description"]];
+    const ws = XLSX.utils.aoa_to_sheet(headers);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "SubPhases");
+    XLSX.writeFile(wb, `subfase-template-${fase.fase}.xlsx`);
+  };
+
+  const handleImportExcel = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = "";
+
+    const reader = new FileReader();
+    reader.onload = async (evt) => {
+      try {
+        const data = evt.target?.result;
+        const wb = XLSX.read(data, { type: "array" });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json<Record<string, string>>(ws, { defval: "" });
+
+        const parseDate = (val: string): string => {
+          if (!val) return "";
+          const parts = val.split("/");
+          if (parts.length === 3) {
+            const [d, m, y] = parts;
+            return `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
+          }
+          return val;
+        };
+
+        let importedCount = 0;
+        for (const row of rows) {
+          const name = row["Name"]?.trim();
+          if (!name) continue;
+          const email = row["PIC Email"]?.trim();
+          const user = users.find((u) => u.email === email);
+          if (!user) continue;
+
+          await apiFetch(`/api/projects/${projectId}/fases/${fase.id}/subfases`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              name,
+              picId: user.id,
+              picStartDate: parseDate(row["PIC Start Date"]) || null,
+              picTargetDate: parseDate(row["PIC Target Date"]) || null,
+              customerStartDate: parseDate(row["Customer Start Date"]) || null,
+              customerTargetDate: parseDate(row["Customer Target Date"]) || null,
+              documentUrl: row["Document URL"] || null,
+              description: row["Description"] || null,
+            }),
+          });
+          importedCount++;
+        }
+
+        if (importedCount > 0) {
+          toast("success", `Imported ${importedCount} SubPhase(s)`);
+          refetch();
+        } else {
+          toast("error", "No valid rows found. Check email addresses match users.");
+        }
+      } catch {
+        toast("error", "Failed to parse Excel file");
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  };
+
+  const progress = computeFaseProgress(fase.subFases ?? []);
+
+  const FASE_COLORS: Record<string, string> = {
+    RFQ: "border-blue-200 bg-blue-50",
+    DIE_GO: "border-green-200 bg-green-50",
+    EVENT_PROJECT: "border-emerald-200 bg-emerald-50",
+    MASS_PRO: "border-yellow-200 bg-yellow-50",
+  };
+  const FASE_HEADER_COLORS: Record<string, string> = {
+    RFQ: "text-blue-700",
+    DIE_GO: "text-green-700",
+    EVENT_PROJECT: "text-emerald-700",
+    MASS_PRO: "text-yellow-700",
+  };
+
+  const addSubFase = async () => {
+    if (!addForm.name || !addForm.picId) { toast("error", "Name and PIC are required"); return; }
+    setSaving(true);
+    const res = await apiFetch(`/api/projects/${projectId}/fases/${fase.id}/subfases`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(addForm),
+    });
+    const data = await res.json();
+    setSaving(false);
+    if (!res.ok) { toast("error", data.error ?? "Failed to add SubPhase"); return; }
+    toast("success", "SubPhase added");
+    setAddForm({ name: "", description: "", picId: "", picStartDate: "", picTargetDate: "", customerStartDate: "", customerTargetDate: "", documentUrl: "" });
+    setShowAddForm(false);
+    refetch();
+  };
+
+  return (
+    <div className={`rounded-xl border-2 ${FASE_COLORS[fase.fase]}`}>
+      {/* Phase header */}
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full flex items-center gap-3 px-4 py-3 text-left"
+      >
+        {expanded ? <ChevronDown className="w-4 h-4 text-gray-500 shrink-0" /> : <ChevronRight className="w-4 h-4 text-gray-500 shrink-0" />}
+        <span className={`font-bold text-sm ${FASE_HEADER_COLORS[fase.fase]}`}>{FASE_LABELS[fase.fase]}</span>
+        <div className="flex-1 h-1.5 bg-white/60 rounded-full mx-2">
+          <div className="h-1.5 bg-current rounded-full transition-all" style={{ width: `${progress}%`, color: "inherit" }} />
         </div>
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50">
-              <tr>
-                {["Jenis", "Judul", "Deskripsi", "Status", "PIC", "Dibuat"].map(
-                  (h) => (
-                    <th
-                      key={h}
-                      className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider"
-                    >
-                      {h}
-                    </th>
-                  ),
-                )}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {filtered.map((item) => (
-                <tr key={item.id} className="hover:bg-gray-50">
-                  <td className="px-3 py-3">
-                    <span
-                      className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${item.type === "HINANHYO" ? "bg-purple-100 text-purple-700" : "bg-cyan-100 text-cyan-700"}`}
-                    >
-                      {HINANHYO_TYPE_LABELS[item.type]}
-                    </span>
-                  </td>
-                  <td className="px-3 py-3 font-medium text-gray-900">
-                    {item.title}
-                  </td>
-                  <td className="px-3 py-3 text-gray-500 max-w-48 truncate">
-                    {item.description ?? "-"}
-                  </td>
-                  <td className="px-3 py-3">
-                    {canEdit ? (
-                      <select
-                        value={item.status}
-                        onChange={(e) =>
-                          handleStatusChange(item.id, e.target.value)
-                        }
-                        className={`text-xs rounded px-2 py-1 border font-medium ${getHinanhyoStatusColor(item.status)}`}
-                      >
-                        {Object.entries(HINANHYO_STATUS_LABELS).map(
-                          ([k, v]) => (
-                            <option key={k} value={k}>
-                              {v}
-                            </option>
-                          ),
-                        )}
-                      </select>
-                    ) : (
-                      <span
-                        className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${getHinanhyoStatusColor(item.status)}`}
-                      >
-                        {HINANHYO_STATUS_LABELS[item.status]}
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-3 py-3 text-gray-600">
-                    {item.pic?.name ?? "-"}
-                  </td>
-                  <td className="px-3 py-3 text-gray-500 whitespace-nowrap">
-                    {formatDate(item.createdAt)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <span className="text-xs font-semibold text-gray-600 shrink-0">{progress}%</span>
+        <span className="text-xs text-gray-500 shrink-0 ml-1">({(fase.subFases ?? []).filter((s) => s.isDone).length}/{(fase.subFases ?? []).length})</span>
+      </button>
+
+      {expanded && (
+        <div className="px-4 pb-4 space-y-2">
+          {/* SubFases */}
+          {(fase.subFases ?? []).length === 0 && !showAddForm && (
+            <p className="text-xs text-gray-400 text-center py-4">No subphases yet. Click + to add one.</p>
+          )}
+          {(fase.subFases ?? []).map((sf) => (
+            <SubFaseRow key={sf.id} subFase={sf} users={users} toast={toast} refetch={refetch} />
+          ))}
+
+          {/* Add SubFase form */}
+          {showAddForm && (
+            <div className="bg-white rounded-lg border border-gray-200 p-4 space-y-3 mt-2">
+              <p className="text-xs font-bold text-gray-700">New SubPhase</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="col-span-2">
+                  <label className="block text-xs text-gray-500 mb-1">SubPhase Name *</label>
+                  <input value={addForm.name} onChange={(e) => setAddForm({ ...addForm, name: e.target.value })}
+                    placeholder="e.g. Dankaku PP1"
+                    className="w-full border border-gray-200 rounded px-2.5 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-xs text-gray-500 mb-1">PIC SubPhase *</label>
+                  <select value={addForm.picId} onChange={(e) => setAddForm({ ...addForm, picId: e.target.value })}
+                    className="w-full border border-gray-200 rounded px-2.5 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500">
+                    <option value="">Select PIC...</option>
+                    {users.map((u) => (
+                      <option key={u.id} value={u.id}>{u.name} — {DEPARTMENT_LABELS[u.department!] ?? u.role}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">PIC Start Date</label>
+                  <input type="date" value={addForm.picStartDate} onChange={(e) => setAddForm({ ...addForm, picStartDate: e.target.value })}
+                    className="w-full border border-gray-200 rounded px-2.5 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">PIC Target Date</label>
+                  <input type="date" value={addForm.picTargetDate} onChange={(e) => setAddForm({ ...addForm, picTargetDate: e.target.value })}
+                    className="w-full border border-gray-200 rounded px-2.5 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Customer Start Date</label>
+                  <input type="date" value={addForm.customerStartDate} onChange={(e) => setAddForm({ ...addForm, customerStartDate: e.target.value })}
+                    className="w-full border border-gray-200 rounded px-2.5 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Customer Target Date</label>
+                  <input type="date" value={addForm.customerTargetDate} onChange={(e) => setAddForm({ ...addForm, customerTargetDate: e.target.value })}
+                    className="w-full border border-gray-200 rounded px-2.5 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-xs text-gray-500 mb-1">Document URL</label>
+                  <input value={addForm.documentUrl} onChange={(e) => setAddForm({ ...addForm, documentUrl: e.target.value })}
+                    placeholder="https://..."
+                    className="w-full border border-gray-200 rounded px-2.5 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-xs text-gray-500 mb-1">Description</label>
+                  <textarea value={addForm.description} onChange={(e) => setAddForm({ ...addForm, description: e.target.value })}
+                    rows={2}
+                    className="w-full border border-gray-200 rounded px-2.5 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button onClick={addSubFase} disabled={saving}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded text-xs font-medium disabled:opacity-50">
+                  {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}
+                  Add SubPhase
+                </button>
+                <button onClick={() => setShowAddForm(false)} className="px-3 py-1.5 border border-gray-200 rounded text-xs text-gray-600">Cancel</button>
+              </div>
+            </div>
+          )}
+
+          {!showAddForm && (
+            <div className="flex items-center gap-3 mt-1">
+              <button onClick={() => setShowAddForm(true)}
+                className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800 font-medium px-1">
+                <Plus className="w-3.5 h-3.5" />
+                Add SubPhase
+              </button>
+              <button
+                onClick={() => importInputRef.current?.click()}
+                className="flex items-center gap-1.5 text-xs text-green-600 hover:text-green-800 font-medium px-1"
+              >
+                <Download className="w-3.5 h-3.5" />
+                Import Excel
+              </button>
+              <input
+                ref={importInputRef}
+                type="file"
+                accept=".xlsx,.xls"
+                className="hidden"
+                onChange={handleImportExcel}
+              />
+              <button onClick={downloadTemplate}
+                className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-700 font-medium px-1">
+                <Download className="w-3.5 h-3.5" />
+                Template
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>
   );
 }
 
-// ─── Tab 4: MP & Cycle Time ───────────────────────────────────────────────────
-function MPTab({
-  detail,
-  canEdit,
-  onUpdate,
-  toast,
-}: {
-  detail: Project | undefined;
-  canEdit: boolean;
-  onUpdate: (p: Project) => void;
-  toast: (type: "success" | "error", message: string) => void;
+function SubFaseRow({ subFase, users, toast, refetch }: {
+  subFase: SubFase;
+  users: User[];
+  toast: (type: "success" | "error", msg: string) => void;
+  refetch: () => void;
 }) {
-  const [aktualMp, setAktualMp] = useState(detail?.aktualMp ?? 0);
-  const [cycleTimeAktual, setCycleTimeAktual] = useState(
-    detail?.cycleTimeAktual ?? 0,
+  const [toggling, setToggling] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [editForm, setEditForm] = useState({
+    name: subFase.name,
+    picId: subFase.picId,
+    picStartDate: subFase.picStartDate?.slice(0, 10) ?? "",
+    picTargetDate: subFase.picTargetDate?.slice(0, 10) ?? "",
+    customerStartDate: subFase.customerStartDate?.slice(0, 10) ?? "",
+    customerTargetDate: subFase.customerTargetDate?.slice(0, 10) ?? "",
+    documentUrl: subFase.documentUrl ?? "",
+    description: subFase.description ?? "",
+  });
+
+  const toggle = async () => {
+    setToggling(true);
+    const res = await apiFetch(`/api/subfases/${subFase.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ isDone: !subFase.isDone }),
+    });
+    setToggling(false);
+    if (!res.ok) { toast("error", "Failed to update SubPhase"); return; }
+    refetch();
+  };
+
+  const saveEdit = async () => {
+    setSaving(true);
+    const res = await apiFetch(`/api/subfases/${subFase.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: editForm.name,
+        picId: editForm.picId,
+        picStartDate: editForm.picStartDate || null,
+        picTargetDate: editForm.picTargetDate || null,
+        customerStartDate: editForm.customerStartDate || null,
+        customerTargetDate: editForm.customerTargetDate || null,
+        documentUrl: editForm.documentUrl || null,
+        description: editForm.description || null,
+      }),
+    });
+    setSaving(false);
+    if (!res.ok) { toast("error", "Failed to update SubPhase"); return; }
+    toast("success", "SubPhase updated");
+    setEditing(false);
+    refetch();
+  };
+
+  const del = async () => {
+    if (!confirm(`Delete SubPhase "${subFase.name}"?`)) return;
+    const res = await apiFetch(`/api/subfases/${subFase.id}`, { method: "DELETE" });
+    if (!res.ok) { toast("error", "Failed to delete SubPhase"); return; }
+    toast("success", "SubPhase deleted");
+    refetch();
+  };
+
+  const now = new Date();
+  const picTarget = subFase.picTargetDate ? new Date(subFase.picTargetDate) : null;
+  const diffPic = picTarget ? Math.ceil((picTarget.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)) : null;
+
+  let statusDot = "bg-blue-400";
+  if (subFase.isDone) statusDot = "bg-green-500";
+  else if (diffPic !== null && diffPic < 0) statusDot = "bg-red-500";
+  else if (diffPic !== null && diffPic <= 3) statusDot = "bg-yellow-400";
+
+  if (editing) {
+    return (
+      <div className="bg-white rounded-lg border border-blue-200 px-3 py-3 space-y-3">
+        <div className="grid grid-cols-2 gap-2">
+          <div className="col-span-2">
+            <label className="block text-xs text-gray-500 mb-1">SubPhase Name *</label>
+            <input value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+              className="w-full border border-gray-200 rounded px-2.5 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
+          </div>
+          <div className="col-span-2">
+            <label className="block text-xs text-gray-500 mb-1">PIC *</label>
+            <select value={editForm.picId} onChange={(e) => setEditForm({ ...editForm, picId: e.target.value })}
+              className="w-full border border-gray-200 rounded px-2.5 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500">
+              {users.map((u) => (
+                <option key={u.id} value={u.id}>{u.name} — {DEPARTMENT_LABELS[u.department!] ?? u.role}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">PIC Start Date</label>
+            <input type="date" value={editForm.picStartDate} onChange={(e) => setEditForm({ ...editForm, picStartDate: e.target.value })}
+              className="w-full border border-gray-200 rounded px-2.5 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">PIC Target Date</label>
+            <input type="date" value={editForm.picTargetDate} onChange={(e) => setEditForm({ ...editForm, picTargetDate: e.target.value })}
+              className="w-full border border-gray-200 rounded px-2.5 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Customer Start Date</label>
+            <input type="date" value={editForm.customerStartDate} onChange={(e) => setEditForm({ ...editForm, customerStartDate: e.target.value })}
+              className="w-full border border-gray-200 rounded px-2.5 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Customer Target Date</label>
+            <input type="date" value={editForm.customerTargetDate} onChange={(e) => setEditForm({ ...editForm, customerTargetDate: e.target.value })}
+              className="w-full border border-gray-200 rounded px-2.5 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
+          </div>
+          <div className="col-span-2">
+            <label className="block text-xs text-gray-500 mb-1">Document URL</label>
+            <input value={editForm.documentUrl} onChange={(e) => setEditForm({ ...editForm, documentUrl: e.target.value })}
+              placeholder="https://..."
+              className="w-full border border-gray-200 rounded px-2.5 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
+          </div>
+          <div className="col-span-2">
+            <label className="block text-xs text-gray-500 mb-1">Description</label>
+            <textarea value={editForm.description} onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+              rows={2}
+              className="w-full border border-gray-200 rounded px-2.5 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <button onClick={saveEdit} disabled={saving}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded text-xs font-medium disabled:opacity-50">
+            {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+            Save
+          </button>
+          <button onClick={() => setEditing(false)} className="px-3 py-1.5 border border-gray-200 rounded text-xs text-gray-600">Cancel</button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={`flex items-start gap-3 bg-white rounded-lg border px-3 py-2.5 ${subFase.isDone ? "border-green-200 opacity-75" : "border-gray-200"}`}>
+      <button
+        onClick={toggle}
+        disabled={toggling}
+        className={`mt-0.5 w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 transition-colors ${
+          subFase.isDone ? "bg-green-500 border-green-500" : "border-gray-300 hover:border-blue-400"
+        }`}
+      >
+        {toggling ? <Loader2 className="w-3 h-3 animate-spin text-white" /> : subFase.isDone && <Check className="w-3 h-3 text-white" />}
+      </button>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <span className={`w-2 h-2 rounded-full shrink-0 ${statusDot}`} />
+          <p className={`text-sm font-medium ${subFase.isDone ? "line-through text-gray-400" : "text-gray-900"}`}>{subFase.name}</p>
+          {subFase.documentUrl && (
+            <a href={subFase.documentUrl} target="_blank" rel="noopener noreferrer"
+              className="text-blue-500 hover:text-blue-700" title="Open document">
+              <ExternalLink className="w-3 h-3" />
+            </a>
+          )}
+        </div>
+        <div className="flex items-center gap-3 mt-0.5 text-xs text-gray-500 flex-wrap">
+          <span>PIC: <span className="font-medium">{subFase.pic?.name ?? "-"}</span></span>
+          {subFase.picTargetDate && <span>PIC Target: {formatDate(subFase.picTargetDate)}</span>}
+          {subFase.customerTargetDate && <span>Cust Target: {formatDate(subFase.customerTargetDate)}</span>}
+        </div>
+      </div>
+      <div className="flex items-center gap-0.5 shrink-0">
+        <button onClick={() => setEditing(true)} className="p-1 text-gray-300 hover:text-blue-500 rounded transition-colors">
+          <Edit2 className="w-3.5 h-3.5" />
+        </button>
+        <button onClick={del} className="p-1 text-gray-300 hover:text-red-500 rounded transition-colors">
+          <Trash2 className="w-3.5 h-3.5" />
+        </button>
+      </div>
+    </div>
   );
+}
+
+// ─── Hinanhyo Tab ─────────────────────────────────────────────────────────────
+
+function HinanhyoTab({ detail, toast, refetch }: {
+  detail: Project;
+  toast: (type: "success" | "error", msg: string) => void;
+  refetch: () => void;
+}) {
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState({ type: "HINANHYO", title: "", description: "", status: "PENDING", subFaseId: "" });
   const [saving, setSaving] = useState(false);
 
-  if (!detail) return null;
+  const { data: items = [], refetch: refetchHinanhyo } = useQuery<HinanhyoDR[]>({
+    queryKey: ["hinanhyo", detail.id],
+    queryFn: () => apiFetch(`/api/projects/${detail.id}/hinanhyo`).then((r) => r.json()),
+  });
 
-  const eff = detail.cycleTimeAktual
-    ? ((detail.cycleTimeTarget / detail.cycleTimeAktual) * 100).toFixed(1) + "%"
-    : "-";
+  const allSubFases = (detail.fases ?? []).flatMap((f) => (f.subFases ?? []).map((sf) => ({ ...sf, faseName: FASE_LABELS[f.fase] })));
 
-  const handleSave = async () => {
+  const add = async () => {
+    if (!form.title) { toast("error", "Title is required"); return; }
+    setSaving(true);
+    const res = await apiFetch(`/api/projects/${detail.id}/hinanhyo`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...form, subFaseId: form.subFaseId || null }),
+    });
+    const data = await res.json();
+    setSaving(false);
+    if (!res.ok) { toast("error", data.error ?? "Failed"); return; }
+    toast("success", "Item added");
+    setForm({ type: "HINANHYO", title: "", description: "", status: "PENDING", subFaseId: "" });
+    setShowForm(false);
+    refetchHinanhyo();
+  };
+
+  const updateStatus = async (id: string, status: string) => {
+    await apiFetch(`/api/hinanhyo/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status }),
+    });
+    refetchHinanhyo();
+  };
+
+  const del = async (id: string) => {
+    if (!confirm("Delete this item?")) return;
+    await apiFetch(`/api/hinanhyo/${id}`, { method: "DELETE" });
+    refetchHinanhyo();
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h3 className="font-semibold text-gray-800">Hinanhyo / DR / Komarigoto / VA</h3>
+        <button onClick={() => setShowForm(!showForm)}
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-medium">
+          <Plus className="w-3.5 h-3.5" /> Add Item
+        </button>
+      </div>
+
+      {showForm && (
+        <div className="bg-gray-50 rounded-lg border border-gray-200 p-4 space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">Type *</label>
+              <select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                {Object.entries(HINANHYO_TYPE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">Location (SubPhase)</label>
+              <select value={form.subFaseId} onChange={(e) => setForm({ ...form, subFaseId: e.target.value })}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="">General (no specific SubPhase)</option>
+                {allSubFases.map((sf) => (
+                  <option key={sf.id} value={sf.id}>{sf.faseName} — {sf.name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="col-span-2">
+              <label className="block text-xs font-semibold text-gray-600 mb-1">Title *</label>
+              <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })}
+                placeholder="Issue title..."
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+            <div className="col-span-2">
+              <label className="block text-xs font-semibold text-gray-600 mb-1">Description</label>
+              <textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })}
+                rows={2}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={add} disabled={saving}
+              className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium disabled:opacity-50">
+              {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+              Add
+            </button>
+            <button onClick={() => setShowForm(false)} className="px-4 py-2 border border-gray-200 rounded-lg text-sm text-gray-600">Cancel</button>
+          </div>
+        </div>
+      )}
+
+      {items.length === 0 ? (
+        <p className="text-sm text-gray-400 text-center py-8">No items yet</p>
+      ) : (
+        <div className="space-y-2">
+          {items.map((item) => (
+            <HinanhyoRow
+              key={item.id}
+              item={item}
+              allSubFases={allSubFases}
+              onDelete={() => del(item.id)}
+              onRefetch={refetchHinanhyo}
+              toast={toast}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Hinanhyo Row ─────────────────────────────────────────────────────────────
+
+function HinanhyoRow({ item, allSubFases, onDelete, onRefetch, toast }: {
+  item: HinanhyoDR;
+  allSubFases: (SubFase & { faseName: string })[];
+  onDelete: () => void;
+  onRefetch: () => void;
+  toast: (type: "success" | "error", msg: string) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [editForm, setEditForm] = useState({
+    title: item.title,
+    description: item.description ?? "",
+    type: item.type,
+    subFaseId: item.subFaseId ?? "",
+    status: item.status,
+  });
+
+  const save = async () => {
+    setSaving(true);
+    const res = await apiFetch(`/api/hinanhyo/${item.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: editForm.title,
+        description: editForm.description || null,
+        type: editForm.type,
+        subFaseId: editForm.subFaseId || null,
+        status: editForm.status,
+      }),
+    });
+    setSaving(false);
+    if (!res.ok) { toast("error", "Failed to update item"); return; }
+    toast("success", "Item updated");
+    setEditing(false);
+    onRefetch();
+  };
+
+  if (editing) {
+    return (
+      <div className="bg-white border border-blue-200 rounded-lg p-3 space-y-3">
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Type</label>
+            <select value={editForm.type} onChange={(e) => setEditForm({ ...editForm, type: e.target.value as HinanhyoDRType })}
+              className="w-full border border-gray-200 rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500">
+              {Object.entries(HINANHYO_TYPE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Status</label>
+            <select value={editForm.status} onChange={(e) => setEditForm({ ...editForm, status: e.target.value as HinanhyoDRStatus })}
+              className="w-full border border-gray-200 rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500">
+              {Object.entries(HINANHYO_STATUS_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">SubPhase</label>
+            <select value={editForm.subFaseId} onChange={(e) => setEditForm({ ...editForm, subFaseId: e.target.value })}
+              className="w-full border border-gray-200 rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500">
+              <option value="">General</option>
+              {allSubFases.map((sf) => (
+                <option key={sf.id} value={sf.id}>{sf.faseName} — {sf.name}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Title *</label>
+            <input value={editForm.title} onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
+              className="w-full border border-gray-200 rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500" />
+          </div>
+          <div className="col-span-2">
+            <label className="block text-xs text-gray-500 mb-1">Description</label>
+            <textarea value={editForm.description} onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+              rows={2}
+              className="w-full border border-gray-200 rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500" />
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <button onClick={save} disabled={saving}
+            className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 text-white rounded text-xs font-medium disabled:opacity-50">
+            {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+            Save
+          </button>
+          <button onClick={() => setEditing(false)} className="px-3 py-1.5 border border-gray-200 rounded text-xs text-gray-600">Cancel</button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-white border border-gray-100 rounded-lg p-3 flex items-start gap-3">
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-xs font-semibold bg-gray-100 text-gray-600 px-2 py-0.5 rounded">{HINANHYO_TYPE_LABELS[item.type]}</span>
+          {item.subFase && (
+            <span className="text-xs text-blue-600 bg-blue-50 px-2 py-0.5 rounded">@ {item.subFase.name}</span>
+          )}
+          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${getHinanhyoStatusColor(item.status)}`}>
+            {HINANHYO_STATUS_LABELS[item.status]}
+          </span>
+        </div>
+        <p className="text-sm font-medium text-gray-900 mt-1">{item.title}</p>
+        {item.description && <p className="text-xs text-gray-500 mt-0.5">{item.description}</p>}
+        <p className="text-xs text-gray-400 mt-1">{formatDate(item.createdAt)}</p>
+      </div>
+      <div className="flex items-center gap-1 shrink-0">
+        <button onClick={() => setEditing(true)} className="p-1 text-gray-300 hover:text-blue-500 rounded">
+          <Edit2 className="w-3.5 h-3.5" />
+        </button>
+        <button onClick={onDelete} className="p-1 text-gray-300 hover:text-red-500 rounded">
+          <Trash2 className="w-3.5 h-3.5" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Manpower Tab ─────────────────────────────────────────────────────────────
+
+function ManpowerTab({ detail, onUpdate, toast, refetch }: {
+  detail: Project;
+  onUpdate: (p: Project) => void;
+  toast: (type: "success" | "error", msg: string) => void;
+  refetch: () => void;
+}) {
+  const [aktualMp, setAktualMp] = useState(String(detail.aktualMp ?? ""));
+  const [saving, setSaving] = useState(false);
+
+  const save = async () => {
     setSaving(true);
     const res = await apiFetch(`/api/projects/${detail.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        aktualMp,
-        cycleTimeAktual: cycleTimeAktual || null,
-      }),
+      body: JSON.stringify({ aktualMp: aktualMp || null }),
     });
-    const updated = await res.json();
+    const data = await res.json();
     setSaving(false);
-    if (!res.ok) {
-      toast("error", updated.error ?? "Gagal menyimpan data MP");
-      return;
-    }
-    onUpdate(updated);
-    toast("success", "Data MP & Cycle Time berhasil disimpan");
+    if (!res.ok) { toast("error", data.error ?? "Update failed"); return; }
+    toast("success", "Manpower updated");
+    onUpdate(data);
+    refetch();
   };
 
   return (
-    <div className="space-y-6">
-      {/* Man Power */}
-      <div>
-        <h3 className="text-sm font-semibold text-gray-800 mb-3">
-          Data Man Power (MP)
-        </h3>
-        <div className="grid grid-cols-2 gap-4">
-          <div className="bg-gray-50 rounded-xl p-4">
-            <p className="text-xs text-gray-500 font-medium mb-1">
-              Kebutuhan MP (Rencana)
-            </p>
-            <p className="text-3xl font-bold text-gray-900">
-              {detail.kebutuhanMp}
-            </p>
-            <p className="text-xs text-gray-400">orang</p>
-          </div>
-          <div
-            className={`rounded-xl p-4 ${(detail.aktualMp ?? 0) > detail.kebutuhanMp ? "bg-red-50" : "bg-green-50"}`}
-          >
-            <p className="text-xs text-gray-500 font-medium mb-1">
-              Aktual MP (Realisasi)
-            </p>
-            {canEdit ? (
-              <input
-                type="number"
-                min="0"
-                value={aktualMp}
-                onChange={(e) => setAktualMp(Number(e.target.value))}
-                className="text-3xl font-bold text-gray-900 bg-transparent w-20 focus:outline-none border-b border-gray-300"
-              />
-            ) : (
-              <p className="text-3xl font-bold text-gray-900">
-                {detail.aktualMp ?? "-"}
-              </p>
-            )}
-            <p className="text-xs text-gray-400">orang</p>
-          </div>
+    <div className="space-y-4">
+      <h3 className="font-semibold text-gray-800">Manpower</h3>
+      <div className="grid grid-cols-2 gap-4">
+        <div className="bg-gray-50 rounded-lg p-4">
+          <p className="text-xs font-medium text-gray-500 mb-1">Required MP</p>
+          <p className="text-2xl font-bold text-gray-900">{detail.kebutuhanMp} <span className="text-sm font-normal text-gray-500">persons</span></p>
         </div>
-        {detail.aktualMp && detail.aktualMp > detail.kebutuhanMp && (
-          <p className="text-xs text-red-600 mt-2">
-            ⚠ Kelebihan {detail.aktualMp - detail.kebutuhanMp} orang dari
-            rencana (
-            {Math.round(
-              ((detail.aktualMp - detail.kebutuhanMp) / detail.kebutuhanMp) *
-                100,
-            )}
-            %)
-          </p>
-        )}
-      </div>
-
-      {/* Cycle Time */}
-      <div>
-        <h3 className="text-sm font-semibold text-gray-800 mb-3">Cycle Time</h3>
-        <div className="grid grid-cols-3 gap-4">
-          <div className="bg-gray-50 rounded-xl p-4">
-            <p className="text-xs text-gray-500 font-medium mb-1">Target</p>
-            <p className="text-2xl font-bold text-gray-900">
-              {detail.cycleTimeTarget}
-            </p>
-            <p className="text-xs text-gray-400">hari kerja</p>
-          </div>
-          <div className="bg-gray-50 rounded-xl p-4">
-            <p className="text-xs text-gray-500 font-medium mb-1">Aktual</p>
-            {canEdit ? (
-              <input
-                type="number"
-                min="0"
-                value={cycleTimeAktual}
-                onChange={(e) => setCycleTimeAktual(Number(e.target.value))}
-                className="text-2xl font-bold text-gray-900 bg-transparent w-20 focus:outline-none border-b border-gray-300"
-                placeholder="0"
-              />
-            ) : (
-              <p className="text-2xl font-bold text-gray-900">
-                {detail.cycleTimeAktual ?? "-"}
-              </p>
-            )}
-            <p className="text-xs text-gray-400">hari kerja</p>
-          </div>
-          <div
-            className={`rounded-xl p-4 ${detail.cycleTimeAktual && detail.cycleTimeAktual > detail.cycleTimeTarget ? "bg-red-50" : "bg-green-50"}`}
-          >
-            <p className="text-xs text-gray-500 font-medium mb-1">Efisiensi</p>
-            <p className="text-2xl font-bold text-gray-900">{eff}</p>
-            <p className="text-xs text-gray-400">
-              {detail.cycleTimeAktual
-                ? detail.cycleTimeAktual <= detail.cycleTimeTarget
-                  ? "✓ Tepat/Lebih Cepat"
-                  : "⚠ Molor"
-                : "Dalam Proses"}
-            </p>
+        <div className="bg-gray-50 rounded-lg p-4">
+          <p className="text-xs font-medium text-gray-500 mb-1">Actual MP</p>
+          <div className="flex items-center gap-2">
+            <input
+              type="number"
+              min="0"
+              value={aktualMp}
+              onChange={(e) => setAktualMp(e.target.value)}
+              placeholder="-"
+              className="w-24 border border-gray-200 rounded-lg px-3 py-1.5 text-sm font-bold text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <button onClick={save} disabled={saving}
+              className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-medium disabled:opacity-50">
+              {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+              Save
+            </button>
           </div>
         </div>
       </div>
-
-      {canEdit && (
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 disabled:opacity-50"
-        >
-          {saving ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
-          ) : (
-            <Save className="w-4 h-4" />
-          )}
-          Simpan
-        </button>
+      {detail.aktualMp && detail.aktualMp > detail.kebutuhanMp && (
+        <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 text-sm text-orange-700">
+          ⚠ Actual MP exceeds required by {detail.aktualMp - detail.kebutuhanMp} person(s) ({Math.round(((detail.aktualMp - detail.kebutuhanMp) / detail.kebutuhanMp) * 100)}% over)
+        </div>
       )}
     </div>
   );
 }
 
-// ─── Tab 5: Activity Log ──────────────────────────────────────────────────────
-function AktivitasTab({ projectId }: { projectId: string }) {
-  const { data: logs = [], isLoading } = useQuery<ActivityLog[]>({
-    queryKey: ["activity", projectId],
-    queryFn: () =>
-      apiFetch(`/api/projects/${projectId}/activity`).then((r) => r.json()),
+// ─── Activity Tab ─────────────────────────────────────────────────────────────
+
+function ActivityTab({ detail }: { detail: Project }) {
+  const { data: logs = [] } = useQuery<ActivityLog[]>({
+    queryKey: ["activity", detail.id],
+    queryFn: () => apiFetch(`/api/projects/${detail.id}/activity`).then((r) => r.json()),
   });
 
   return (
-    <div>
-      {isLoading ? (
-        <div className="py-8 text-center text-gray-400 text-sm">Memuat...</div>
-      ) : logs.length === 0 ? (
-        <div className="py-8 text-center text-gray-400 text-sm">
-          Belum ada aktivitas
-        </div>
+    <div className="space-y-3">
+      <h3 className="font-semibold text-gray-800">Activity Log</h3>
+      {logs.length === 0 ? (
+        <p className="text-sm text-gray-400 text-center py-8">No activity yet</p>
       ) : (
-        <div className="relative">
-          <div className="absolute left-4 top-0 bottom-0 w-px bg-gray-200" />
-          <div className="space-y-4 pl-10">
-            {logs.map((log) => (
-              <div key={log.id} className="relative">
-                <div className="absolute -left-6 w-3 h-3 rounded-full bg-blue-500 border-2 border-white shadow" />
-                <div className="bg-gray-50 rounded-lg p-3">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-xs font-semibold text-blue-700 bg-blue-100 px-2 py-0.5 rounded">
-                      {log.action}
-                    </span>
-                    <span className="text-xs text-gray-400">
-                      {formatDateTime(log.createdAt)}
-                    </span>
-                  </div>
-                  <p className="text-sm text-gray-700">{log.detail}</p>
-                  <p className="text-xs text-gray-400 mt-1">
-                    oleh {log.user?.name ?? "-"}
-                  </p>
-                </div>
+        <div className="space-y-2">
+          {logs.map((log) => (
+            <div key={log.id} className="flex items-start gap-3 py-2 border-b border-gray-50 last:border-0">
+              <div className="w-7 h-7 rounded-full bg-blue-100 flex items-center justify-center shrink-0 mt-0.5">
+                <span className="text-xs font-bold text-blue-600">
+                  {((log as ActivityLog & { user?: { name: string } }).user?.name ?? "?").charAt(0).toUpperCase()}
+                </span>
               </div>
-            ))}
-          </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-sm font-medium text-gray-900">{(log as ActivityLog & { user?: { name: string } }).user?.name ?? "Unknown"}</span>
+                  <span className="text-xs font-semibold text-gray-500">{log.action}</span>
+                </div>
+                {log.detail && <p className="text-xs text-gray-500 mt-0.5">{log.detail}</p>}
+                <p className="text-xs text-gray-400 mt-0.5">{formatDateTime(log.createdAt)}</p>
+              </div>
+            </div>
+          ))}
         </div>
       )}
-    </div>
-  );
-}
-
-// ─── Helper ───────────────────────────────────────────────────────────────────
-function Field({ label, value }: { label: string; value: React.ReactNode }) {
-  return (
-    <div>
-      <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">
-        {label}
-      </p>
-      <div className="text-sm text-gray-900">{value}</div>
     </div>
   );
 }

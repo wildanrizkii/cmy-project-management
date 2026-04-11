@@ -3,7 +3,6 @@ import { db } from "@/lib/db";
 import bcrypt from "bcryptjs";
 import { NextRequest } from "next/server";
 
-// GET all users (for PIC selection, etc.)
 export async function GET(req: NextRequest) {
   const session = await auth();
   if (!session?.user) return Response.json({ error: "Unauthorized" }, { status: 401 });
@@ -27,21 +26,23 @@ export async function GET(req: NextRequest) {
   return Response.json(users);
 }
 
-// POST register new user (public)
 export async function POST(req: NextRequest) {
+  const session = await auth();
+  if (!session?.user) return Response.json({ error: "Unauthorized" }, { status: 401 });
+
   const body = await req.json();
   const { name, email, password, role, department } = body;
 
   if (!name || !email || !password) {
-    return Response.json({ error: "Nama, email, dan password wajib diisi" }, { status: 400 });
+    return Response.json({ error: "Name, email, and password are required" }, { status: 400 });
   }
   if (password.length < 8) {
-    return Response.json({ error: "Password minimal 8 karakter" }, { status: 400 });
+    return Response.json({ error: "Password must be at least 8 characters" }, { status: 400 });
   }
 
   const existing = await db.user.findUnique({ where: { email } });
   if (existing) {
-    return Response.json({ error: "Email sudah terdaftar" }, { status: 409 });
+    return Response.json({ error: "Email is already registered" }, { status: 409 });
   }
 
   const hashed = await bcrypt.hash(password, 10);

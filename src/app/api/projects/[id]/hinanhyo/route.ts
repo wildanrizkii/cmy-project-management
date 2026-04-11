@@ -14,7 +14,7 @@ export async function GET(
   const items = await db.hinanhyoDR.findMany({
     where: { projectId: id },
     include: {
-      pic: { select: { id: true, name: true, email: true, role: true, department: true, createdAt: true } },
+      subFase: { select: { id: true, name: true } },
     },
     orderBy: { createdAt: "desc" },
   });
@@ -31,19 +31,14 @@ export async function POST(
 
   const { id } = await params;
 
-  const project = await db.project.findUnique({ where: { id: id } });
-  if (!project) return Response.json({ error: "Proyek tidak ditemukan" }, { status: 404 });
-
-  // Only PIC or Atasan can add
-  if (session.user.role === "BAWAHAN" && project.picId !== session.user.id) {
-    return Response.json({ error: "Tidak memiliki akses" }, { status: 403 });
-  }
+  const project = await db.project.findUnique({ where: { id } });
+  if (!project) return Response.json({ error: "Project not found" }, { status: 404 });
 
   const body = await req.json();
-  const { type, title, description, status } = body;
+  const { type, title, description, status, subFaseId } = body;
 
   if (!type || !title) {
-    return Response.json({ error: "Type dan title wajib diisi" }, { status: 400 });
+    return Response.json({ error: "Type and title are required" }, { status: 400 });
   }
 
   const item = await db.hinanhyoDR.create({
@@ -53,19 +48,20 @@ export async function POST(
       title,
       description: description || null,
       status: status || "PENDING",
-      picId: project.picId,
+      subFaseId: subFaseId || null,
     },
     include: {
-      pic: { select: { id: true, name: true, email: true, role: true, department: true, createdAt: true } },
+      subFase: { select: { id: true, name: true } },
     },
   });
 
+  const typeLabel = type === "HINANHYO" ? "Hinanhyo" : type === "DR" ? "Design Review" : type === "KOMARIGOTO" ? "Komarigoto" : "VA/VE";
   await db.activityLog.create({
     data: {
       projectId: id,
       userId: session.user.id,
-      action: `Tambah ${type === "HINANHYO" ? "Hinanhyo" : "Design Review"}`,
-      detail: `Ditambahkan: ${title}`,
+      action: `${typeLabel} Added`,
+      detail: `Added: ${title}`,
     },
   });
 

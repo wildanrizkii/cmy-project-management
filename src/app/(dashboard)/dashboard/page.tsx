@@ -15,7 +15,7 @@ import {
   AlertCircle,
   X,
 } from "lucide-react";
-import { formatDate, getStatusColor } from "@/lib/utils";
+import { formatDate, getStatusColor, getFaseChartColor } from "@/lib/utils";
 import {
   BarChart,
   Bar,
@@ -57,7 +57,7 @@ function ProjectListTooltip(props: AnyTooltipProps & { labelKey: string; countKe
   return (
     <div className="bg-white border border-gray-200 shadow-xl rounded-xl p-3 text-xs max-w-56">
       <p className="font-semibold text-gray-900 mb-1.5">
-        {label} — <span className="text-blue-600">{count} proyek</span>
+        {label} — <span className="text-blue-600">{count} project(s)</span>
       </p>
       <div className="space-y-0.5 max-h-36 overflow-y-auto">
         {projects.length > 0 ? (
@@ -67,7 +67,7 @@ function ProjectListTooltip(props: AnyTooltipProps & { labelKey: string; countKe
             </p>
           ))
         ) : (
-          <p className="text-gray-400 italic">Tidak ada proyek</p>
+          <p className="text-gray-400 italic">No projects</p>
         )}
       </div>
     </div>
@@ -88,11 +88,11 @@ function HinanhyoTooltip(props: AnyTooltipProps) {
       </p>
       <div className="space-y-1">
         <p className="flex items-center justify-between gap-4">
-          <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-green-500 inline-block" />Diterima</span>
+          <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-green-500 inline-block" />Accepted</span>
           <span className="font-semibold text-green-700">{d.DITERIMA}</span>
         </p>
         <p className="flex items-center justify-between gap-4">
-          <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-red-500 inline-block" />Ditolak</span>
+          <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-red-500 inline-block" />Rejected</span>
           <span className="font-semibold text-red-700">{d.DITOLAK}</span>
         </p>
         <p className="flex items-center justify-between gap-4">
@@ -118,7 +118,7 @@ function StatusPieTooltip(props: AnyTooltipProps) {
   return (
     <div className="bg-white border border-gray-200 shadow-xl rounded-xl p-3 text-xs max-w-56">
       <p className="font-semibold text-gray-900 mb-1.5">
-        {d.name} — <span className="text-blue-600">{d.value} proyek</span>
+        {d.name} — <span className="text-blue-600">{d.value} project(s)</span>
       </p>
       <div className="space-y-0.5 max-h-36 overflow-y-auto">
         {d.projects?.map((p) => (
@@ -182,11 +182,11 @@ function ClockDisplay() {
     <div className="flex items-center gap-3 bg-white border border-gray-100 shadow-sm rounded-xl px-4 py-2.5 self-start sm:self-auto">
       <Calendar className="w-4 h-4 text-gray-400 shrink-0" />
       <span className="text-sm text-gray-600 hidden sm:block">
-        {now.toLocaleDateString("id-ID", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+        {now.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
       </span>
       <span className="text-gray-300 text-sm hidden sm:block">|</span>
       <span className="font-mono text-blue-600 font-semibold tabular-nums text-sm tracking-wider">
-        {now.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", second: "2-digit" })} WIB
+        {now.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
       </span>
     </div>
   );
@@ -197,17 +197,17 @@ export default function DashboardPage() {
   const [monitorPage, setMonitorPage] = useState(1);
   const monitorPerPage = 8;
 
-  const [filterPicId, setFilterPicId] = useState("");
+  const [filterLeaderId, setFilterLeaderId] = useState("");
   const [filterCustomer, setFilterCustomer] = useState("");
   const [filterProjectId, setFilterProjectId] = useState("");
 
-  const hasFilter = filterPicId || filterCustomer || filterProjectId;
+  const hasFilter = filterLeaderId || filterCustomer || filterProjectId;
 
   const { data, isLoading } = useQuery({
-    queryKey: ["dashboard", filterPicId, filterCustomer, filterProjectId],
+    queryKey: ["dashboard", filterLeaderId, filterCustomer, filterProjectId],
     queryFn: () => {
       const params = new URLSearchParams();
-      if (filterPicId) params.set("picId", filterPicId);
+      if (filterLeaderId) params.set("leaderId", filterLeaderId);
       if (filterCustomer) params.set("customer", filterCustomer);
       if (filterProjectId) params.set("projectId", filterProjectId);
       return apiFetch(`/api/dashboard?${params}`).then((r) => r.json());
@@ -220,7 +220,7 @@ export default function DashboardPage() {
       <div className="p-8 flex items-center justify-center min-h-screen">
         <div className="text-center space-y-3">
           <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto" />
-          <p className="text-gray-500 text-sm">Memuat dashboard...</p>
+          <p className="text-gray-500 text-sm">Loading dashboard...</p>
         </div>
       </div>
     );
@@ -229,16 +229,16 @@ export default function DashboardPage() {
   const kpi = data?.kpi ?? {};
   const charts = data?.charts ?? {};
   const taskMonitoring = data?.taskMonitoring ?? [];
-  const filterOptions = data?.filterOptions ?? { pics: [], customers: [], projects: [] };
+  const filterOptions = data?.filterOptions ?? { leaders: [], customers: [], projects: [] };
 
   // ─── KPI cards ──────────────────────────────────────────────────────────────
   const kpiCards = [
-    { label: "Proyek Aktif", value: kpi.totalAktif ?? 0, icon: Activity, bg: "bg-blue-50", text: "text-blue-700" },
-    { label: "Proyek Terlambat", value: kpi.totalTerlambat ?? 0, icon: AlertTriangle, bg: "bg-red-50", text: "text-red-700" },
+    { label: "Active Projects", value: kpi.totalAktif ?? 0, icon: Activity, bg: "bg-blue-50", text: "text-blue-700" },
+    { label: "Overdue Projects", value: kpi.totalTerlambat ?? 0, icon: AlertTriangle, bg: "bg-red-50", text: "text-red-700" },
     { label: "Hinanhyo Pending", value: kpi.totalHinanhyoPending ?? 0, icon: AlertCircle, bg: "bg-orange-50", text: "text-orange-700" },
-    { label: "Rata-rata Progress", value: `${kpi.rataRataProgress ?? 0}%`, icon: TrendingUp, bg: "bg-green-50", text: "text-green-700" },
-    { label: "Selesai Bulan Ini", value: kpi.selesaiBulanIni ?? 0, icon: CheckCircle2, bg: "bg-emerald-50", text: "text-emerald-700" },
-    { label: "Deadline 7 Hari", value: kpi.deadline7Hari ?? 0, icon: Clock, bg: "bg-yellow-50", text: "text-yellow-700" },
+    { label: "Avg. Progress", value: `${kpi.rataRataProgress ?? 0}%`, icon: TrendingUp, bg: "bg-green-50", text: "text-green-700" },
+    { label: "Completed This Month", value: kpi.selesaiBulanIni ?? 0, icon: CheckCircle2, bg: "bg-emerald-50", text: "text-emerald-700" },
+    { label: "Deadline in 7 Days", value: kpi.deadline7Hari ?? 0, icon: Clock, bg: "bg-yellow-50", text: "text-yellow-700" },
   ];
 
   // ─── Chart data ──────────────────────────────────────────────────────────────
@@ -270,7 +270,7 @@ export default function DashboardPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Pemantauan proyek secara real-time</p>
+          <p className="text-sm text-gray-500 mt-0.5">Real-time project monitoring</p>
         </div>
         <ClockDisplay />
       </div>
@@ -284,18 +284,18 @@ export default function DashboardPage() {
             onChange={(e) => { setFilterProjectId(e.target.value); setMonitorPage(1); }}
             className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-700 min-w-40"
           >
-            <option value="">Semua Proyek</option>
+            <option value="">All Projects</option>
             {filterOptions.projects.map((p: { id: string; code: string; name: string }) => (
               <option key={p.id} value={p.id}>{p.code} — {p.name}</option>
             ))}
           </select>
           <select
-            value={filterPicId}
-            onChange={(e) => { setFilterPicId(e.target.value); setMonitorPage(1); }}
+            value={filterLeaderId}
+            onChange={(e) => { setFilterLeaderId(e.target.value); setMonitorPage(1); }}
             className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-700 min-w-36"
           >
-            <option value="">Semua PIC</option>
-            {filterOptions.pics.map((p: { id: string; name: string }) => (
+            <option value="">All Leaders</option>
+            {filterOptions.leaders.map((p: { id: string; name: string }) => (
               <option key={p.id} value={p.id}>{p.name}</option>
             ))}
           </select>
@@ -304,14 +304,14 @@ export default function DashboardPage() {
             onChange={(e) => { setFilterCustomer(e.target.value); setMonitorPage(1); }}
             className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-700 min-w-36"
           >
-            <option value="">Semua Customer</option>
+            <option value="">All Customers</option>
             {filterOptions.customers.map((c: string) => (
               <option key={c} value={c}>{c}</option>
             ))}
           </select>
           {hasFilter && (
             <button
-              onClick={() => { setFilterPicId(""); setFilterCustomer(""); setFilterProjectId(""); setMonitorPage(1); }}
+              onClick={() => { setFilterLeaderId(""); setFilterCustomer(""); setFilterProjectId(""); setMonitorPage(1); }}
               className="flex items-center gap-1 px-3 py-1.5 text-sm text-gray-500 hover:text-gray-800 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
             >
               <X className="w-3.5 h-3.5" />
@@ -320,7 +320,7 @@ export default function DashboardPage() {
           )}
           {hasFilter && (
             <span className="text-xs text-blue-600 font-medium bg-blue-50 px-2 py-1 rounded-full">
-              Filter aktif — {taskMonitoring.length} proyek
+              Filter active — {taskMonitoring.length} project(s)
             </span>
           )}
         </div>
@@ -340,17 +340,17 @@ export default function DashboardPage() {
       </div>
 
       {/* Charts Row 1: Status + Fase + Hinanhyo */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
 
         {/* Chart 1: Distribusi Status — Pie with count labels always visible */}
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
           <h2 className="text-sm font-semibold text-gray-900 mb-1 flex items-center gap-2">
             <BarChart3 className="w-4 h-4 text-blue-600" />
-            Distribusi Status Proyek
+            Project Status Distribution
           </h2>
-          <p className="text-xs text-gray-400 mb-3">Hover untuk lihat daftar proyek</p>
+          <p className="text-xs text-gray-400 mb-3">Hover to view project list</p>
           {statusChartData.every((d: { value: number }) => d.value === 0) ? (
-            <div className="h-48 flex items-center justify-center text-gray-400 text-sm">Tidak ada data</div>
+            <div className="h-48 flex items-center justify-center text-gray-400 text-sm">No data</div>
           ) : (
             <>
               <ResponsiveContainer width="100%" height={200}>
@@ -389,9 +389,9 @@ export default function DashboardPage() {
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
           <h2 className="text-sm font-semibold text-gray-900 mb-1 flex items-center gap-2">
             <TrendingUp className="w-4 h-4 text-blue-600" />
-            Jumlah Proyek per Fase
+            Projects per Phase
           </h2>
-          <p className="text-xs text-gray-400 mb-3">Hover untuk lihat daftar proyek</p>
+          <p className="text-xs text-gray-400 mb-3">Hover to view project list</p>
           <ResponsiveContainer width="100%" height={200}>
             <BarChart data={phaseChartData} margin={{ top: 20, right: 8, left: -20, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} />
@@ -404,12 +404,16 @@ export default function DashboardPage() {
               />
               <Bar
                 dataKey="count"
-                name="Proyek"
-                fill="#3b82f6"
+                name="Projects"
                 radius={[4, 4, 0, 0]}
                 isAnimationActive={false}
                 label={{ position: "top", fontSize: 12, fontWeight: "bold", fill: "#1d4ed8" }}
-              />
+              >
+                {phaseChartData.map((entry: { fase: string; count: number }, i: number) => {
+                  const faseKey = Object.entries(FASE_LABELS).find(([, v]) => v === entry.fase)?.[0] ?? "";
+                  return <Cell key={i} fill={getFaseChartColor(faseKey)} />;
+                })}
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -418,11 +422,11 @@ export default function DashboardPage() {
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
           <h2 className="text-sm font-semibold text-gray-900 mb-1 flex items-center gap-2">
             <AlertCircle className="w-4 h-4 text-orange-500" />
-            Status Hinanhyo &amp; DR
+            Hinanhyo &amp; DR Status
           </h2>
-          <p className="text-xs text-gray-400 mb-3">Hover untuk lihat detail per proyek</p>
+          <p className="text-xs text-gray-400 mb-3">Hover for project details</p>
           {hinanhyoByProject.length === 0 ? (
-            <div className="h-48 flex items-center justify-center text-gray-400 text-sm">Tidak ada data Hinanhyo/DR</div>
+            <div className="h-48 flex items-center justify-center text-gray-400 text-sm">No Hinanhyo/DR data</div>
           ) : (
             <>
               <ResponsiveContainer width="100%" height={200}>
@@ -431,8 +435,8 @@ export default function DashboardPage() {
                   <XAxis dataKey="code" fontSize={10} tick={{ fill: "#6b7280" }} />
                   <YAxis allowDecimals={false} fontSize={11} tick={{ fill: "#6b7280" }} />
                   <Tooltip content={<HinanhyoTooltip />} />
-                  <Bar dataKey="DITERIMA" name="Diterima" stackId="a" fill="#22c55e" isAnimationActive={false} />
-                  <Bar dataKey="DITOLAK" name="Ditolak" stackId="a" fill="#ef4444" isAnimationActive={false} />
+                  <Bar dataKey="DITERIMA" name="Accepted" stackId="a" fill="#22c55e" isAnimationActive={false} />
+                  <Bar dataKey="DITOLAK" name="Rejected" stackId="a" fill="#ef4444" isAnimationActive={false} />
                   <Bar
                     dataKey="PENDING"
                     name="Pending"
@@ -446,8 +450,8 @@ export default function DashboardPage() {
               </ResponsiveContainer>
               <div className="flex gap-3 mt-2 justify-center">
                 {[
-                  { label: "Diterima", color: "#22c55e" },
-                  { label: "Ditolak", color: "#ef4444" },
+                  { label: "Accepted", color: "#22c55e" },
+                  { label: "Rejected", color: "#ef4444" },
                   { label: "Pending", color: "#f59e0b" },
                 ].map((l) => (
                   <span key={l.label} className="flex items-center gap-1 text-xs text-gray-600">
@@ -461,14 +465,15 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Charts Row 2: MP & Cycle Time */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        {/* MP Chart */}
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
-          <h2 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2">
-            <Users className="w-4 h-4 text-blue-600" />
-            Man Power: Kebutuhan vs Aktual
-          </h2>
+      {/* Charts Row 2: MP */}
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+        <h2 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2">
+          <Users className="w-4 h-4 text-blue-600" />
+          Manpower: Required vs Actual
+        </h2>
+        {(charts.mpChart ?? []).length === 0 ? (
+          <div className="h-40 flex items-center justify-center text-gray-400 text-sm">No manpower data</div>
+        ) : (
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={charts.mpChart ?? []} margin={{ top: 20, left: -10, right: 8, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} />
@@ -476,42 +481,13 @@ export default function DashboardPage() {
               <YAxis fontSize={11} />
               <Tooltip />
               <Legend fontSize={11} />
-              <Bar dataKey="kebutuhan" name="Kebutuhan" fill="#93c5fd" radius={[4, 4, 0, 0]} isAnimationActive={false}
+              <Bar dataKey="kebutuhan" name="Required" fill="#93c5fd" radius={[4, 4, 0, 0]} isAnimationActive={false}
                 label={{ position: "top", fontSize: 10, fontWeight: "bold", fill: "#1e40af" }} />
-              <Bar dataKey="aktual" name="Aktual" fill="#3b82f6" radius={[4, 4, 0, 0]} isAnimationActive={false}
+              <Bar dataKey="aktual" name="Actual" fill="#3b82f6" radius={[4, 4, 0, 0]} isAnimationActive={false}
                 label={{ position: "top", fontSize: 10, fontWeight: "bold", fill: "#1d4ed8" }} />
             </BarChart>
           </ResponsiveContainer>
-        </div>
-
-        {/* Cycle Time Chart */}
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
-          <h2 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2">
-            <Clock className="w-4 h-4 text-blue-600" />
-            Cycle Time: Target vs Aktual (hari)
-          </h2>
-          {(charts.ctChart ?? []).length === 0 ? (
-            <div className="h-55 flex flex-col items-center justify-center gap-2">
-              <BarChart3 className="w-8 h-8 text-gray-200" />
-              <p className="text-sm text-gray-400">Belum ada data cycle time aktual</p>
-              <p className="text-xs text-gray-300">Isi Cycle Time Aktual di tab MP & Cycle Time proyek</p>
-            </div>
-          ) : (
-            <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={charts.ctChart} margin={{ top: 20, left: -10, right: 8, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="code" fontSize={11} />
-                <YAxis fontSize={11} />
-                <Tooltip />
-                <Legend fontSize={11} />
-                <Bar dataKey="target" name="Target" fill="#86efac" radius={[4, 4, 0, 0]} isAnimationActive={false}
-                  label={{ position: "top", fontSize: 10, fontWeight: "bold", fill: "#166534" }} />
-                <Bar dataKey="aktual" name="Aktual" fill="#22c55e" radius={[4, 4, 0, 0]} isAnimationActive={false}
-                  label={{ position: "top", fontSize: 10, fontWeight: "bold", fill: "#15803d" }} />
-              </BarChart>
-            </ResponsiveContainer>
-          )}
-        </div>
+        )}
       </div>
 
       {/* Task Monitoring Table */}
@@ -527,14 +503,14 @@ export default function DashboardPage() {
               <div className="flex items-center gap-2">
                 <Calendar className="w-4 h-4 text-blue-600" />
                 <h2 className="text-sm font-semibold text-gray-900">Task Monitoring</h2>
-                <span className="text-xs text-gray-400">({taskMonitoring.length} proyek)</span>
+                <span className="text-xs text-gray-400">({taskMonitoring.length} project(s))</span>
               </div>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="bg-gray-50">
                   <tr>
-                    {["Kode", "Nama Proyek", "PIC", "Customer", "Deadline", "Sisa/Terlambat", "Status", "Progress"].map((h) => (
+                    {["Assy No.", "Assy Name", "Project Leader", "Customer", "Target Date", "Days Remaining", "Status", "Progress"].map((h) => (
                       <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">
                         {h}
                       </th>
@@ -544,8 +520,8 @@ export default function DashboardPage() {
                 <tbody className="divide-y divide-gray-50">
                   {paginatedMonitor.map(
                     (row: {
-                      code: string; name: string; picName: string; customer: string;
-                      endDate: string; daysRemaining: number; status: string; overallProgress: number;
+                      code: string; name: string; leaderName: string; customer: string;
+                      targetDate: string; daysRemaining: number; status: string; overallProgress: number;
                     }) => {
                       const isLate = row.daysRemaining < 0;
                       const isNear = row.daysRemaining >= 0 && row.daysRemaining <= 7;
@@ -553,11 +529,11 @@ export default function DashboardPage() {
                         <tr key={row.code} className={isLate ? "bg-red-50" : isNear ? "bg-yellow-50" : ""}>
                           <td className="px-4 py-3 font-mono font-medium text-gray-700 whitespace-nowrap">{row.code}</td>
                           <td className="px-4 py-3 font-medium text-gray-900 max-w-40 truncate">{row.name}</td>
-                          <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{row.picName}</td>
+                          <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{row.leaderName}</td>
                           <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{row.customer}</td>
-                          <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{formatDate(row.endDate)}</td>
+                          <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{formatDate(row.targetDate ?? row.code)}</td>
                           <td className={`px-4 py-3 font-semibold whitespace-nowrap ${isLate ? "text-red-600" : isNear ? "text-yellow-600" : "text-gray-600"}`}>
-                            {isLate ? `Terlambat ${-row.daysRemaining} hari` : row.daysRemaining === 0 ? "Hari ini" : `Sisa ${row.daysRemaining} hari`}
+                            {isLate ? `Overdue by ${-row.daysRemaining} day(s)` : row.daysRemaining === 0 ? "Due today" : `${row.daysRemaining} day(s) left`}
                           </td>
                           <td className="px-4 py-3">
                             <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium border ${getStatusColor(row.status)}`}>
@@ -579,13 +555,13 @@ export default function DashboardPage() {
                 </tbody>
               </table>
               {taskMonitoring.length === 0 && (
-                <div className="py-12 text-center text-gray-400 text-sm">Tidak ada data proyek</div>
+                <div className="py-12 text-center text-gray-400 text-sm">No project data</div>
               )}
             </div>
             {totalMonitorPages > 1 && (
               <div className="px-5 py-3 border-t border-gray-100 flex items-center justify-between">
                 <p className="text-xs text-gray-500">
-                  {(monitorPage - 1) * monitorPerPage + 1}–{Math.min(monitorPage * monitorPerPage, taskMonitoring.length)} dari {taskMonitoring.length}
+                  {(monitorPage - 1) * monitorPerPage + 1}–{Math.min(monitorPage * monitorPerPage, taskMonitoring.length)} of {taskMonitoring.length}
                 </p>
                 <div className="flex items-center gap-1">
                   <button onClick={() => setMonitorPage(Math.max(1, monitorPage - 1))} disabled={monitorPage === 1}
