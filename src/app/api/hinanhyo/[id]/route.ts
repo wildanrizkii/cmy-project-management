@@ -11,18 +11,10 @@ export async function PATCH(
 
   const { id } = await params;
   const body = await req.json();
-  const { status, title, description } = body;
+  const { status, title, description, subFaseId } = body;
 
-  const item = await db.hinanhyoDR.findUnique({
-    where: { id },
-    include: { project: true },
-  });
-
-  if (!item) return Response.json({ error: "Tidak ditemukan" }, { status: 404 });
-
-  if (session.user.role === "BAWAHAN" && item.project.picId !== session.user.id) {
-    return Response.json({ error: "Tidak memiliki akses" }, { status: 403 });
-  }
+  const item = await db.hinanhyoDR.findUnique({ where: { id } });
+  if (!item) return Response.json({ error: "Not found" }, { status: 404 });
 
   const updated = await db.hinanhyoDR.update({
     where: { id },
@@ -30,9 +22,10 @@ export async function PATCH(
       ...(status !== undefined && { status }),
       ...(title !== undefined && { title }),
       ...(description !== undefined && { description }),
+      ...(subFaseId !== undefined && { subFaseId: subFaseId || null }),
     },
     include: {
-      pic: { select: { id: true, name: true, email: true, role: true, department: true, createdAt: true } },
+      subFase: { select: { id: true, name: true } },
     },
   });
 
@@ -48,17 +41,9 @@ export async function DELETE(
 
   const { id } = await params;
 
-  const item = await db.hinanhyoDR.findUnique({
-    where: { id },
-    include: { project: true },
-  });
-
-  if (!item) return Response.json({ error: "Tidak ditemukan" }, { status: 404 });
-
-  if (session.user.role === "BAWAHAN" && item.project.picId !== session.user.id) {
-    return Response.json({ error: "Tidak memiliki akses" }, { status: 403 });
-  }
+  const item = await db.hinanhyoDR.findUnique({ where: { id } });
+  if (!item) return Response.json({ error: "Not found" }, { status: 404 });
 
   await db.hinanhyoDR.delete({ where: { id } });
-  return Response.json({ message: "Berhasil dihapus" });
+  return Response.json({ message: "Deleted successfully" });
 }

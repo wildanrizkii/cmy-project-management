@@ -3,87 +3,52 @@ import { apiFetch } from "@/lib/fetch-client";
 
 import { useState, useRef, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Bell, AlertTriangle, AlertCircle, Info, ChevronDown, ChevronUp, X } from "lucide-react";
+import { Bell, AlertTriangle, AlertCircle, Info, X } from "lucide-react";
 
-type AlertItem = {
+type SubFaseAlert = {
+  id: string;
+  projectId: string;
+  name: string;
+  picName: string;
+  alertLevel: "RED" | "ORANGE" | "YELLOW";
+  alertMsg: string;
+};
+
+type ProjectAlert = {
   level: "KRITIS" | "PERINGATAN" | "INFO";
   message: string;
   projectCode?: string;
   details?: { code: string; name: string; daysLate: number }[];
 };
 
-const LEVEL_CONFIG = {
-  KRITIS: {
+const SUBFASE_CONFIG = {
+  RED: {
     icon: AlertTriangle,
     color: "text-red-600",
     bg: "bg-red-50",
     border: "border-red-100",
-    badge: "bg-red-500",
-    label: "Kritis",
+    label: "Critical",
+    dot: "bg-red-500",
   },
-  PERINGATAN: {
+  ORANGE: {
     icon: AlertCircle,
+    color: "text-orange-600",
+    bg: "bg-orange-50",
+    border: "border-orange-100",
+    label: "Warning",
+    dot: "bg-orange-500",
+  },
+  YELLOW: {
+    icon: Info,
     color: "text-yellow-600",
     bg: "bg-yellow-50",
     border: "border-yellow-100",
-    badge: "bg-yellow-500",
-    label: "Peringatan",
-  },
-  INFO: {
-    icon: Info,
-    color: "text-blue-500",
-    bg: "bg-blue-50",
-    border: "border-blue-100",
-    badge: "bg-blue-500",
-    label: "Info",
+    label: "Attention",
+    dot: "bg-yellow-500",
   },
 };
 
-function AlertRow({ alert, onDismiss }: { alert: AlertItem; onDismiss: () => void }) {
-  const [expanded, setExpanded] = useState(false);
-  const cfg = LEVEL_CONFIG[alert.level];
-  const Icon = cfg.icon;
-
-  return (
-    <div className={`border-b border-gray-50 last:border-0 ${cfg.bg}`}>
-      <div className="flex items-start gap-2.5 px-4 py-3">
-        <Icon className={`w-4 h-4 mt-0.5 shrink-0 ${cfg.color}`} />
-        <div className="flex-1 min-w-0">
-          <p className="text-xs font-medium text-gray-800 leading-snug">{alert.message}</p>
-          {alert.details && expanded && (
-            <ul className="mt-2 space-y-1">
-              {alert.details.map((d) => (
-                <li key={d.code} className="flex items-center gap-2 text-xs text-gray-600">
-                  <span className="font-mono font-semibold text-gray-700 shrink-0">{d.code}</span>
-                  <span className="truncate">{d.name}</span>
-                  <span className={`shrink-0 font-semibold ${cfg.color}`}>{d.daysLate}h</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-        <div className="flex items-center gap-0.5 shrink-0">
-          {alert.details && alert.details.length > 0 && (
-            <button
-              onClick={() => setExpanded(!expanded)}
-              className="p-1 text-gray-400 hover:text-gray-600 rounded"
-            >
-              {expanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-            </button>
-          )}
-          <button
-            onClick={onDismiss}
-            className="p-1 text-gray-300 hover:text-gray-500 rounded"
-          >
-            <X className="w-3 h-3" />
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-const LS_KEY = "cmw_dismissed_alerts";
+const LS_KEY = "cmw_dismissed_sf_alerts";
 
 function loadDismissed(): Set<string> {
   try {
@@ -96,8 +61,48 @@ function saveDismissed(set: Set<string>) {
   try { localStorage.setItem(LS_KEY, JSON.stringify([...set])); } catch {}
 }
 
-function alertKey(a: AlertItem) {
-  return `${a.level}:${a.message}`;
+function SubFaseAlertRow({ alert, onDismiss }: { alert: SubFaseAlert; onDismiss: () => void }) {
+  const cfg = SUBFASE_CONFIG[alert.alertLevel];
+  const Icon = cfg.icon;
+
+  return (
+    <div className={`border-b border-gray-50 last:border-0 ${cfg.bg}`}>
+      <div className="flex items-start gap-2.5 px-4 py-3">
+        <Icon className={`w-4 h-4 mt-0.5 shrink-0 ${cfg.color}`} />
+        <div className="flex-1 min-w-0">
+          <p className="text-xs font-semibold text-gray-800 leading-snug">{alert.name}</p>
+          <p className="text-xs text-gray-500 mt-0.5">PIC: {alert.picName}</p>
+          <p className={`text-xs font-medium mt-0.5 ${cfg.color}`}>{alert.alertMsg}</p>
+        </div>
+        <button
+          onClick={onDismiss}
+          className="p-1 text-gray-300 hover:text-gray-500 rounded shrink-0"
+        >
+          <X className="w-3 h-3" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function ProjectAlertRow({ alert, onDismiss }: { alert: ProjectAlert; onDismiss: () => void }) {
+  const Icon = alert.level === "KRITIS" ? AlertTriangle : alert.level === "PERINGATAN" ? AlertCircle : Info;
+  const color = alert.level === "KRITIS" ? "text-red-600" : alert.level === "PERINGATAN" ? "text-yellow-600" : "text-blue-500";
+  const bg = alert.level === "KRITIS" ? "bg-red-50" : alert.level === "PERINGATAN" ? "bg-yellow-50" : "bg-blue-50";
+
+  return (
+    <div className={`border-b border-gray-50 last:border-0 ${bg}`}>
+      <div className="flex items-start gap-2.5 px-4 py-3">
+        <Icon className={`w-4 h-4 mt-0.5 shrink-0 ${color}`} />
+        <div className="flex-1 min-w-0">
+          <p className="text-xs font-medium text-gray-800 leading-snug">{alert.message}</p>
+        </div>
+        <button onClick={onDismiss} className="p-1 text-gray-300 hover:text-gray-500 rounded shrink-0">
+          <X className="w-3 h-3" />
+        </button>
+      </div>
+    </div>
+  );
 }
 
 export function NotificationBell() {
@@ -113,12 +118,21 @@ export function NotificationBell() {
     refetchInterval: 30000,
   });
 
-  const allAlerts: AlertItem[] = data?.alerts ?? [];
-  const visible = allAlerts.filter((a) => !dismissed.has(alertKey(a)));
-  const kritisCount = visible.filter((a) => a.level === "KRITIS").length;
-  const totalCount = visible.length;
+  const subFaseAlerts: SubFaseAlert[] = [
+    ...(data?.subFaseAlerts?.red ?? []),
+    ...(data?.subFaseAlerts?.orange ?? []),
+    ...(data?.subFaseAlerts?.yellow ?? []),
+  ];
 
-  // Close on outside click
+  const projectAlerts: ProjectAlert[] = data?.alerts ?? [];
+
+  const visibleSubFase = subFaseAlerts.filter((a) => !dismissed.has(`sf:${a.id}`));
+  const visibleProject = projectAlerts.filter((a) => !dismissed.has(`pa:${a.level}:${a.message}`));
+
+  const totalCount = visibleSubFase.length + visibleProject.length;
+  const criticalCount = visibleSubFase.filter((a) => a.alertLevel === "RED").length +
+    visibleProject.filter((a) => a.level === "KRITIS").length;
+
   useEffect(() => {
     function handleClick(e: MouseEvent) {
       if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
@@ -129,13 +143,23 @@ export function NotificationBell() {
     return () => document.removeEventListener("mousedown", handleClick);
   }, [open]);
 
-  const dismiss = (a: AlertItem) => {
-    const next = new Set(dismissed).add(alertKey(a));
+  const dismissSf = (a: SubFaseAlert) => {
+    const next = new Set(dismissed).add(`sf:${a.id}`);
     setDismissed(next);
     saveDismissed(next);
   };
+
+  const dismissPa = (a: ProjectAlert) => {
+    const next = new Set(dismissed).add(`pa:${a.level}:${a.message}`);
+    setDismissed(next);
+    saveDismissed(next);
+  };
+
   const dismissAll = () => {
-    const next = new Set(allAlerts.map(alertKey));
+    const next = new Set([
+      ...subFaseAlerts.map((a) => `sf:${a.id}`),
+      ...projectAlerts.map((a) => `pa:${a.level}:${a.message}`),
+    ]);
     setDismissed(next);
     saveDismissed(next);
   };
@@ -145,11 +169,11 @@ export function NotificationBell() {
       <button
         onClick={() => setOpen(!open)}
         className="relative p-2 text-gray-500 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors"
-        title="Notifikasi"
+        title="Notifications"
       >
         <Bell className="w-5 h-5" />
         {totalCount > 0 && (
-          <span className={`absolute top-1 right-1 w-4 h-4 rounded-full text-white text-[10px] font-bold flex items-center justify-center ${kritisCount > 0 ? "bg-red-500" : "bg-yellow-500"}`}>
+          <span className={`absolute top-1 right-1 w-4 h-4 rounded-full text-white text-[10px] font-bold flex items-center justify-center ${criticalCount > 0 ? "bg-red-500" : "bg-yellow-500"}`}>
             {totalCount > 9 ? "9+" : totalCount}
           </span>
         )}
@@ -161,7 +185,7 @@ export function NotificationBell() {
           <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
             <div className="flex items-center gap-2">
               <Bell className="w-4 h-4 text-gray-600" />
-              <span className="text-sm font-semibold text-gray-900">Notifikasi</span>
+              <span className="text-sm font-semibold text-gray-900">Notifications</span>
               {totalCount > 0 && (
                 <span className="bg-gray-100 text-gray-600 text-xs font-medium px-1.5 py-0.5 rounded-full">
                   {totalCount}
@@ -169,30 +193,51 @@ export function NotificationBell() {
               )}
             </div>
             {totalCount > 0 && (
-              <button
-                onClick={dismissAll}
-                className="text-xs text-blue-600 hover:underline"
-              >
-                Tutup semua
+              <button onClick={dismissAll} className="text-xs text-blue-600 hover:underline">
+                Dismiss all
               </button>
             )}
           </div>
+
+          {/* Legend */}
+          {totalCount > 0 && (
+            <div className="flex gap-3 px-4 py-2 bg-gray-50 border-b border-gray-100 text-xs text-gray-500">
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500 inline-block" />Critical</span>
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-500 inline-block" />Warning</span>
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-yellow-400 inline-block" />Attention</span>
+            </div>
+          )}
 
           {/* List */}
           <div className="max-h-96 overflow-y-auto">
             {totalCount === 0 ? (
               <div className="py-10 text-center">
                 <Bell className="w-8 h-8 text-gray-200 mx-auto mb-2" />
-                <p className="text-sm text-gray-400">Tidak ada notifikasi</p>
+                <p className="text-sm text-gray-400">No notifications</p>
               </div>
             ) : (
-              (["KRITIS", "PERINGATAN", "INFO"] as const).map((level) =>
-                allAlerts
-                  .filter((a) => a.level === level && !dismissed.has(alertKey(a)))
-                  .map((a) => (
-                    <AlertRow key={alertKey(a)} alert={a} onDismiss={() => dismiss(a)} />
-                  ))
-              )
+              <>
+                {/* SubFase alerts grouped by level */}
+                {(["RED", "ORANGE", "YELLOW"] as const).map((level) =>
+                  visibleSubFase
+                    .filter((a) => a.alertLevel === level)
+                    .map((a) => (
+                      <SubFaseAlertRow key={a.id} alert={a} onDismiss={() => dismissSf(a)} />
+                    ))
+                )}
+                {/* Project-level alerts */}
+                {(["KRITIS", "PERINGATAN", "INFO"] as const).map((level) =>
+                  visibleProject
+                    .filter((a) => a.level === level)
+                    .map((a) => (
+                      <ProjectAlertRow
+                        key={`${a.level}:${a.message}`}
+                        alert={a}
+                        onDismiss={() => dismissPa(a)}
+                      />
+                    ))
+                )}
+              </>
             )}
           </div>
         </div>

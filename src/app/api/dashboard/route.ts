@@ -7,7 +7,7 @@ export async function GET(req: NextRequest) {
   if (!session?.user) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
   const { searchParams } = new URL(req.url);
-  const filterPicId = searchParams.get("picId") ?? "";
+  const filterLeaderId = searchParams.get("leaderId") ?? "";
   const filterCustomer = searchParams.get("customer") ?? "";
   const filterProjectId = searchParams.get("projectId") ?? "";
 
@@ -15,56 +15,103 @@ export async function GET(req: NextRequest) {
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
   const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
   const in7Days = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-  const twoWeeksAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
   const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const twoWeeksAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
 
-  const baseWhere = session.user.role === "BAWAHAN" ? { picId: session.user.id } : {};
-
-  // All projects (unfiltered) — used for KPI and filter options
-  const allProjectsBase = await db.project.findMany({
-    where: baseWhere,
+  // All projects unfiltered
+  const allProjects = await db.project.findMany({
     include: {
-      pic: { select: { id: true, name: true, email: true, role: true, department: true, createdAt: true } },
+      projectLeader: { select: { id: true, name: true } },
+      fases: {
+        include: { subFases: { select: { isDone: true } } },
+      },
       _count: { select: { hinanhyoDRs: true } },
     },
   });
 
-  // Apply chart-level filters
-  let chartProjects = allProjectsBase;
-  if (filterPicId) chartProjects = chartProjects.filter((p) => p.picId === filterPicId);
+  // Compute overall progress from subfases
+  function getProgress(project: typeof allProjects[0]) {
+    const fases = project.fases;
+    if (!fases.length) return 0;
+    let totalSub = 0, doneSub = 0;
+    for (const f of fases) {
+      totalSub += f.subFases.length;
+      doneSub += f.subFases.filter((s) => s.isDone).length;
+    }
+    return totalSub > 0 ? Math.round((doneSub / totalSub) * 100) : 0;
+  }
+
+  // Apply chart filters
+  let chartProjects = allProjects;
+  if (filterLeaderId) chartProjects = chartProjects.filter((p) => p.projectLeaderId === filterLeaderId);
   if (filterCustomer) chartProjects = chartProjects.filter((p) => p.customer === filterCustomer);
   if (filterProjectId) chartProjects = chartProjects.filter((p) => p.id === filterProjectId);
 
-  // ─── KPI (always unfiltered — full picture) ──────────────────────────────────
-  const totalAktif = allProjectsBase.filter((p) => p.status === "DALAM_PROSES").length;
-  const totalTerlambat = allProjectsBase.filter((p) => p.status === "TERLAMBAT").length;
+  // ─── KPI ────────────────────────────────────────────────────────────────────
+  const totalAktif = allProjects.filter((p) => p.status === "DALAM_PROSES").length;
+  const totalTerlambat = allProjects.filter((p) => p.status === "TERLAMBAT").length;
 
-  const totalHinanhyoPending = await db.hinanhyoDR.count({
-    where: {
-      status: "PENDING",
-      ...(session.user.role === "BAWAHAN" ? { project: { picId: session.user.id } } : {}),
-    },
-  });
+  const totalHinanhyoPending = await db.hinanhyoDR.count({ where: { status: "PENDING" } });
 
-  const activeProjects = allProjectsBase.filter((p) => p.status === "DALAM_PROSES");
+  const activeProjects = allProjects.filter((p) => p.status === "DALAM_PROSES");
   const rataRataProgress =
     activeProjects.length > 0
-      ? Math.round(activeProjects.reduce((s, p) => s + p.overallProgress, 0) / activeProjects.length)
+      ? Math.round(activeProjects.reduce((s, p) => s + getProgress(p), 0) / activeProjects.length)
       : 0;
 
-  const selesaiBulanIni = allProjectsBase.filter(
+  const selesaiBulanIni = allProjects.filter(
     (p) =>
       p.status === "SELESAI" &&
       new Date(p.updatedAt) >= startOfMonth &&
-      new Date(p.updatedAt) <= endOfMonth,
+      new Date(p.updatedAt) <= endOfMonth
   ).length;
 
-  const deadline7Hari = allProjectsBase.filter((p) => {
-    const end = new Date(p.endDate);
+  const deadline7Hari = allProjects.filter((p) => {
+    const end = new Date(p.targetDate);
     return end >= now && end <= in7Days && p.status !== "SELESAI";
   }).length;
 
-  // ─── Alerts (unfiltered) ─────────────────────────────────────────────────────
+  // ─── SubFase Alerts ─────────────────────────────────────────────────────────
+  const allSubFases = await db.subFase.findMany({
+    where: { isDone: false },
+    include: {
+      pic: { select: { id: true, name: true } },
+      projectFase: { select: { fase: true } },
+    },
+  });
+
+  const subFaseAlerts = allSubFases
+    .filter((sf) => sf.picTargetDate)
+    .map((sf) => {
+      const picTarget = new Date(sf.picTargetDate!);
+      const custTarget = sf.customerTargetDate ? new Date(sf.customerTargetDate) : null;
+      const diffPic = Math.ceil((picTarget.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+      const diffCust = custTarget ? Math.ceil((custTarget.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)) : null;
+
+      let alertLevel: "RED" | "ORANGE" | "YELLOW" | null = null;
+      let alertMsg = "";
+
+      if (diffCust !== null && diffCust < 0) {
+        alertLevel = "RED";
+        alertMsg = `Overdue ${Math.abs(diffCust)} day(s) from Customer target`;
+      } else if (diffPic < 0) {
+        alertLevel = "ORANGE";
+        alertMsg = `Overdue ${Math.abs(diffPic)} day(s) from PIC target`;
+      } else if (diffPic <= 3) {
+        alertLevel = "YELLOW";
+        alertMsg = `H-${diffPic} from PIC target`;
+      }
+
+      if (!alertLevel) return null;
+      return { id: sf.id, projectId: sf.projectId, name: sf.name, picName: sf.pic.name, alertLevel, alertMsg };
+    })
+    .filter(Boolean);
+
+  const redAlerts = subFaseAlerts.filter((a) => a?.alertLevel === "RED");
+  const orangeAlerts = subFaseAlerts.filter((a) => a?.alertLevel === "ORANGE");
+  const yellowAlerts = subFaseAlerts.filter((a) => a?.alertLevel === "YELLOW");
+
+  // Project alerts for bell (legacy format)
   const alerts: Array<{
     level: "KRITIS" | "PERINGATAN" | "INFO";
     message: string;
@@ -72,102 +119,75 @@ export async function GET(req: NextRequest) {
     details?: { code: string; name: string; daysLate: number }[];
   }> = [];
 
-  const terlambatProjects = allProjectsBase
+  const terlambatProjects = allProjects
     .filter((p) => p.status === "TERLAMBAT")
     .map((p) => ({
       ...p,
-      daysLate: Math.ceil((now.getTime() - new Date(p.endDate).getTime()) / (1000 * 60 * 60 * 24)),
+      daysLate: Math.ceil((now.getTime() - new Date(p.targetDate).getTime()) / (1000 * 60 * 60 * 24)),
     }))
     .sort((a, b) => b.daysLate - a.daysLate);
 
   if (terlambatProjects.length === 1) {
     alerts.push({
       level: "KRITIS",
-      message: `${terlambatProjects[0].code} - ${terlambatProjects[0].name} melewati deadline ${terlambatProjects[0].daysLate} hari`,
-      projectCode: terlambatProjects[0].code,
-      details: terlambatProjects.map((p) => ({ code: p.code, name: p.name, daysLate: p.daysLate })),
+      message: `${terlambatProjects[0].assNumber} - ${terlambatProjects[0].assName} overdue by ${terlambatProjects[0].daysLate} days`,
+      projectCode: terlambatProjects[0].assNumber,
+      details: terlambatProjects.map((p) => ({ code: p.assNumber, name: p.assName, daysLate: p.daysLate })),
     });
   } else if (terlambatProjects.length > 1) {
     alerts.push({
       level: "KRITIS",
-      message: `${terlambatProjects.length} proyek melewati deadline`,
-      details: terlambatProjects.map((p) => ({ code: p.code, name: p.name, daysLate: p.daysLate })),
+      message: `${terlambatProjects.length} projects are overdue`,
+      details: terlambatProjects.map((p) => ({ code: p.assNumber, name: p.assName, daysLate: p.daysLate })),
     });
   }
 
-  for (const p of allProjectsBase.filter((p) => {
-    const end = new Date(p.endDate);
+  for (const p of allProjects.filter((p) => {
+    const end = new Date(p.targetDate);
     return end >= now && end <= in7Days && p.status !== "SELESAI";
   })) {
-    const days = Math.ceil((new Date(p.endDate).getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+    const days = Math.ceil((new Date(p.targetDate).getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
     alerts.push({
       level: "PERINGATAN",
-      message: `${p.code} akan berakhir dalam ${days} hari (${new Date(p.endDate).toLocaleDateString("id-ID")})`,
-      projectCode: p.code,
+      message: `${p.assNumber} deadline in ${days} days`,
+      projectCode: p.assNumber,
     });
   }
 
   const oldPending = await db.hinanhyoDR.count({
-    where: {
-      status: "PENDING",
-      createdAt: { lt: twoWeeksAgo },
-      ...(session.user.role === "BAWAHAN" ? { project: { picId: session.user.id } } : {}),
-    },
+    where: { status: "PENDING", createdAt: { lt: twoWeeksAgo } },
   });
   if (oldPending > 0) {
-    alerts.push({ level: "PERINGATAN", message: `${oldPending} item Hinanhyo/DR sudah pending lebih dari 14 hari` });
+    alerts.push({ level: "PERINGATAN", message: `${oldPending} Hinanhyo/DR items pending for more than 14 days` });
   }
 
-  for (const p of activeProjects) {
-    const total = new Date(p.endDate).getTime() - new Date(p.startDate).getTime();
-    const elapsed = now.getTime() - new Date(p.startDate).getTime();
-    const timePercent = total > 0 ? (elapsed / total) * 100 : 0;
-    if (timePercent >= 50 && p.overallProgress < 30) {
-      alerts.push({
-        level: "PERINGATAN",
-        message: `${p.code} progress ${p.overallProgress}% padahal sudah melewati ${Math.round(timePercent)}% durasi`,
-        projectCode: p.code,
-      });
-    }
-  }
-
-  const proyekBaruMingguIni = allProjectsBase.filter((p) => new Date(p.createdAt) >= oneWeekAgo).length;
+  const proyekBaruMingguIni = allProjects.filter((p) => new Date(p.createdAt) >= oneWeekAgo).length;
   if (proyekBaruMingguIni > 0) {
-    alerts.push({ level: "INFO", message: `${proyekBaruMingguIni} proyek baru ditambahkan minggu ini` });
+    alerts.push({ level: "INFO", message: `${proyekBaruMingguIni} new project(s) added this week` });
   }
 
-  for (const p of allProjectsBase.filter((p) => p.aktualMp && p.aktualMp > p.kebutuhanMp * 1.2)) {
-    const pct = Math.round(((p.aktualMp! - p.kebutuhanMp) / p.kebutuhanMp) * 100);
-    alerts.push({ level: "INFO", message: `${p.code} kelebihan tenaga kerja ${pct}% dari rencana`, projectCode: p.code });
-  }
+  // ─── Charts ─────────────────────────────────────────────────────────────────
 
-  // ─── Charts (filtered by chartProjects) ──────────────────────────────────────
-
-  // 1. Status distribution with project list per status
   const statusDist = ["BELUM_MULAI", "DALAM_PROSES", "SELESAI", "TERLAMBAT", "TUNDA"].map((s) => {
     const ps = chartProjects.filter((p) => p.status === s);
     return {
       status: s,
       count: ps.length,
-      projects: ps.map((p) => ({ code: p.code, name: p.name })),
+      projects: ps.map((p) => ({ code: p.assNumber, name: p.assName })),
     };
   });
 
-  // 2. Phase distribution — count of projects per currentFase with project list
   const phaseDist = ["RFQ", "DIE_GO", "EVENT_PROJECT", "MASS_PRO"].map((f) => {
     const ps = chartProjects.filter((p) => p.currentFase === f);
     return {
       faseKey: f,
       count: ps.length,
-      projects: ps.map((p) => ({ code: p.code, name: p.name })),
+      projects: ps.map((p) => ({ code: p.assNumber, name: p.assName })),
     };
   });
 
-  // 3. Hinanhyo by project for stacked bar
   const allHinanhyo = await db.hinanhyoDR.findMany({
-    where: {
-      projectId: { in: chartProjects.map((p) => p.id) },
-    },
+    where: { projectId: { in: chartProjects.map((p) => p.id) } },
     select: { status: true, projectId: true },
   });
 
@@ -175,8 +195,8 @@ export async function GET(req: NextRequest) {
     .map((p) => {
       const hs = allHinanhyo.filter((h) => h.projectId === p.id);
       return {
-        code: p.code,
-        name: p.name,
+        code: p.assNumber,
+        name: p.assName,
         DITERIMA: hs.filter((h) => h.status === "DITERIMA").length,
         DITOLAK: hs.filter((h) => h.status === "DITOLAK").length,
         PENDING: hs.filter((h) => h.status === "PENDING").length,
@@ -185,53 +205,43 @@ export async function GET(req: NextRequest) {
     })
     .filter((p) => p.total > 0);
 
-  // 4. MP chart
   const mpChart = chartProjects.map((p) => ({
-    code: p.code,
-    name: p.name,
+    code: p.assNumber,
+    name: p.assName,
     kebutuhan: p.kebutuhanMp,
     aktual: p.aktualMp ?? 0,
   }));
 
-  // 5. Cycle time chart
-  const ctChart = chartProjects
-    .filter((p) => p.cycleTimeAktual !== null)
-    .map((p) => ({
-      code: p.code,
-      name: p.name,
-      target: p.cycleTimeTarget,
-      aktual: p.cycleTimeAktual,
-    }));
-
-  // ─── Filter options (from unfiltered base) ────────────────────────────────────
+  // ─── Filter options ──────────────────────────────────────────────────────────
   const filterOptions = {
-    pics: Array.from(
-      new Map(allProjectsBase.map((p) => [p.picId, { id: p.picId, name: p.pic.name }])).values(),
+    leaders: Array.from(
+      new Map(allProjects.map((p) => [p.projectLeaderId, { id: p.projectLeaderId, name: p.projectLeader.name }])).values()
     ),
-    customers: [...new Set(allProjectsBase.map((p) => p.customer))].sort(),
-    projects: allProjectsBase.map((p) => ({ id: p.id, code: p.code, name: p.name })),
+    customers: [...new Set(allProjects.map((p) => p.customer))].sort(),
+    projects: allProjects.map((p) => ({ id: p.id, code: p.assNumber, name: p.assName })),
   };
 
-  // ─── Task monitoring table (filtered) ────────────────────────────────────────
+  // Task monitoring table
   const taskMonitoring = chartProjects.map((p) => {
-    const endDate = new Date(p.endDate);
-    const daysRemaining = Math.ceil((endDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+    const targetDate = new Date(p.targetDate);
+    const daysRemaining = Math.ceil((targetDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
     return {
-      code: p.code,
-      name: p.name,
-      picName: p.pic.name,
+      code: p.assNumber,
+      name: p.assName,
+      leaderName: p.projectLeader.name,
       customer: p.customer,
-      endDate: p.endDate,
+      targetDate: p.targetDate,
       daysRemaining,
       status: p.status,
-      overallProgress: p.overallProgress,
+      overallProgress: getProgress(p),
     };
   });
 
   return Response.json({
     kpi: { totalAktif, totalTerlambat, totalHinanhyoPending, rataRataProgress, selesaiBulanIni, deadline7Hari },
     alerts,
-    charts: { statusDist, phaseDist, hinanhyoByProject, mpChart, ctChart },
+    subFaseAlerts: { red: redAlerts, orange: orangeAlerts, yellow: yellowAlerts },
+    charts: { statusDist, phaseDist, hinanhyoByProject, mpChart },
     taskMonitoring,
     filterOptions,
   });

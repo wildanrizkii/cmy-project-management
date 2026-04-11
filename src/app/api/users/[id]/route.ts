@@ -5,9 +5,7 @@ import { NextRequest } from "next/server";
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
-  if (!session?.user || session.user.role !== "ATASAN") {
-    return Response.json({ error: "Forbidden" }, { status: 403 });
-  }
+  if (!session?.user) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
   const { id } = await params;
   const body = await req.json();
@@ -19,7 +17,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (department !== undefined) updateData.department = department || null;
   if (password) {
     if (password.length < 8) {
-      return Response.json({ error: "Password minimal 8 karakter" }, { status: 400 });
+      return Response.json({ error: "Password must be at least 8 characters" }, { status: 400 });
     }
     updateData.password = await bcrypt.hash(password, 10);
   }
@@ -35,14 +33,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
-  if (!session?.user || session.user.role !== "ATASAN") {
-    return Response.json({ error: "Forbidden" }, { status: 403 });
-  }
+  if (!session?.user) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
   const { id } = await params;
 
   if (id === session.user.id) {
-    return Response.json({ error: "Tidak dapat menghapus akun sendiri" }, { status: 400 });
+    return Response.json({ error: "Cannot delete your own account" }, { status: 400 });
   }
 
   await db.user.delete({ where: { id } });

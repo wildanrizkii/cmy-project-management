@@ -1,6 +1,7 @@
 import NextAuth from "next-auth";
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import Credentials from "next-auth/providers/credentials";
+import Google from "next-auth/providers/google";
 import { db } from "@/lib/db";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
@@ -18,6 +19,16 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     error: "/login",
   },
   providers: [
+    Google({
+      clientId: process.env.GOOGLE_CLIENT_ID!,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+      allowDangerousEmailAccountLinking: true,
+      authorization: {
+        params: {
+          prompt: "select_account",
+        },
+      },
+    }),
     Credentials({
       async authorize(credentials) {
         const parsed = loginSchema.safeParse(credentials);
@@ -46,12 +57,41 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     }),
   ],
   callbacks: {
-    async jwt({ token, user }) {
+    async signIn({ user, account }) {
+      // For Google login, validate email exists in users table
+      if (account?.provider === "google") {
+        if (!user.email) return false;
+        const existing = await db.user.findUnique({
+          where: { email: user.email },
+        });
+        if (!existing) {
+          return "/login?error=not_registered";
+        }
+      }
+      return true;
+    },
+    async jwt({ token, user, account }) {
       if (user) {
-        token.id = user.id;
-        token.role = (user as { role?: string }).role;
-        token.department = (user as { department?: string }).department;
-        token.name = user.name;
+        // For credentials login, user object has all fields
+        if (account?.provider === "credentials") {
+          token.id = user.id;
+          token.role = (user as { role?: string }).role;
+          token.department = (user as { department?: string }).department;
+          token.name = user.name;
+        }
+
+        // For Google login, fetch from DB
+        if (account?.provider === "google" && user.email) {
+          const dbUser = await db.user.findUnique({
+            where: { email: user.email },
+          });
+          if (dbUser) {
+            token.id = dbUser.id;
+            token.role = dbUser.role;
+            token.department = dbUser.department ?? undefined;
+            token.name = dbUser.name;
+          }
+        }
       }
       return token;
     },

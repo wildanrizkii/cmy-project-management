@@ -13,6 +13,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Users,
+  Calendar,
   X,
 } from "lucide-react";
 import { DEPARTMENT_LABELS } from "@/types";
@@ -21,10 +22,11 @@ import { useSidebar } from "./sidebar-context";
 import { useState } from "react";
 
 const navItems = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, atasanOnly: false },
-  { href: "/proyek", label: "Daftar Proyek", icon: FolderKanban, atasanOnly: false },
-  { href: "/kanban", label: "Kanban Board", icon: Kanban, atasanOnly: false },
-  { href: "/users", label: "Manajemen User", icon: Users, atasanOnly: true },
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/proyek", label: "Projects", icon: FolderKanban },
+  { href: "/kanban", label: "Kanban Board", icon: Kanban },
+  { href: "/calendar", label: "Calendar of Events", icon: Calendar },
+  { href: "/users", label: "User Management", icon: Users },
 ];
 
 export function Sidebar() {
@@ -72,28 +74,26 @@ export function Sidebar() {
             Menu
           </p>
         )}
-        {navItems
-          .filter(({ atasanOnly }) => !atasanOnly || session?.user?.role === "ATASAN")
-          .map(({ href, label, icon: Icon }) => {
-            const active = pathname === href || (href !== "/dashboard" && pathname.startsWith(href));
-            return (
-              <Link
-                key={href}
-                href={href}
-                onClick={() => setMobileOpen(false)}
-                className={cn(
-                  "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150",
-                  active
-                    ? "bg-blue-600 text-white shadow-lg shadow-blue-600/30"
-                    : "text-gray-400 hover:bg-white/10 hover:text-white"
-                )}
-                title={collapsed ? label : undefined}
-              >
-                <Icon className="w-5 h-5 shrink-0" />
-                {!collapsed && <span>{label}</span>}
-              </Link>
-            );
-          })}
+        {navItems.map(({ href, label, icon: Icon }) => {
+          const active = pathname === href || (href !== "/dashboard" && pathname.startsWith(href));
+          return (
+            <Link
+              key={href}
+              href={href}
+              onClick={() => setMobileOpen(false)}
+              className={cn(
+                "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150",
+                active
+                  ? "bg-blue-600 text-white shadow-lg shadow-blue-600/30"
+                  : "text-gray-400 hover:bg-white/10 hover:text-white"
+              )}
+              title={collapsed ? label : undefined}
+            >
+              <Icon className="w-5 h-5 shrink-0" />
+              {!collapsed && <span>{label}</span>}
+            </Link>
+          );
+        })}
       </nav>
 
       {/* User section */}
@@ -123,14 +123,14 @@ export function Sidebar() {
               className="flex items-center gap-2 w-full px-3 py-2 text-sm text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
             >
               <LogOut className="w-4 h-4" />
-              <span>Keluar</span>
+              <span>Sign Out</span>
             </button>
           </div>
         ) : (
           <button
             onClick={() => setShowLogoutConfirm(true)}
             className="flex items-center justify-center w-full p-2 text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
-            title="Keluar"
+            title="Sign Out"
           >
             <LogOut className="w-5 h-5" />
           </button>
@@ -182,20 +182,20 @@ export function Sidebar() {
                 <X className="w-4 h-4" />
               </button>
             </div>
-            <h3 className="text-base font-bold text-gray-900 mb-1">Keluar dari aplikasi?</h3>
-            <p className="text-sm text-gray-500 mb-5">Anda akan dikembalikan ke halaman login.</p>
+            <h3 className="text-base font-bold text-gray-900 mb-1">Sign out of the application?</h3>
+            <p className="text-sm text-gray-500 mb-5">You will be redirected to the login page.</p>
             <div className="flex gap-3">
               <button
                 onClick={() => signOut({ callbackUrl: "/login" })}
                 className="flex-1 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium transition-colors"
               >
-                Ya, Keluar
+                Yes, Sign Out
               </button>
               <button
                 onClick={() => setShowLogoutConfirm(false)}
                 className="flex-1 py-2.5 border border-gray-200 hover:bg-gray-50 text-gray-600 rounded-lg text-sm font-medium transition-colors"
               >
-                Batal
+                Cancel
               </button>
             </div>
           </div>

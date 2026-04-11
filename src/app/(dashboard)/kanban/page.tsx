@@ -6,13 +6,12 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea/dnd";
 import { AlertCircle, Clock, Users, LayoutGrid } from "lucide-react";
 import {
-  getStatusColor, getPriorityColor, getFaseColor, formatDate, getDaysRemaining,
+  getPriorityColor, getFaseColor, formatDate, getDaysRemaining, computeProjectProgress, computeFaseProgress,
 } from "@/lib/utils";
 import {
   STATUS_LABELS, FASE_LABELS, PRIORITY_LABELS,
 } from "@/types";
-import type { Project, ProjectStatus, Fase } from "@/types";
-import { useSession } from "next-auth/react";
+import type { Project, ProjectStatus, FaseType } from "@/types";
 import { ProjectDetailModal } from "@/components/proyek/project-detail-modal";
 import { useToast } from "@/components/layout/toast-context";
 import { X } from "lucide-react";
@@ -20,28 +19,27 @@ import { X } from "lucide-react";
 type Mode = "status" | "fase";
 
 const STATUS_COLUMNS: { id: ProjectStatus; label: string; color: string }[] = [
-  { id: "BELUM_MULAI", label: "Belum Mulai", color: "bg-gray-100 border-gray-300" },
-  { id: "DALAM_PROSES", label: "Dalam Proses", color: "bg-blue-50 border-blue-300" },
-  { id: "TERLAMBAT", label: "Terlambat", color: "bg-red-50 border-red-300" },
-  { id: "TUNDA", label: "Tunda", color: "bg-orange-50 border-orange-300" },
-  { id: "SELESAI", label: "Selesai", color: "bg-green-50 border-green-300" },
+  { id: "BELUM_MULAI", label: "Not Started", color: "bg-gray-100 border-gray-300" },
+  { id: "DALAM_PROSES", label: "In Progress", color: "bg-blue-50 border-blue-300" },
+  { id: "TERLAMBAT", label: "Overdue", color: "bg-red-50 border-red-300" },
+  { id: "TUNDA", label: "On Hold", color: "bg-orange-50 border-orange-300" },
+  { id: "SELESAI", label: "Completed", color: "bg-green-50 border-green-300" },
 ];
 
-const FASE_COLUMNS: { id: Fase; label: string; color: string }[] = [
-  { id: "RFQ", label: "RFQ", color: "bg-purple-50 border-purple-300" },
-  { id: "DIE_GO", label: "Die Go", color: "bg-blue-50 border-blue-300" },
-  { id: "EVENT_PROJECT", label: "Event Project", color: "bg-cyan-50 border-cyan-300" },
-  { id: "MASS_PRO", label: "Mass Pro", color: "bg-green-50 border-green-300" },
+const FASE_COLUMNS: { id: FaseType; label: string; color: string }[] = [
+  { id: "RFQ", label: "RFQ", color: "bg-blue-50 border-blue-300" },
+  { id: "DIE_GO", label: "Die Go", color: "bg-green-50 border-green-300" },
+  { id: "EVENT_PROJECT", label: "Event Project", color: "bg-emerald-50 border-emerald-300" },
+  { id: "MASS_PRO", label: "Mass Pro", color: "bg-yellow-50 border-yellow-300" },
 ];
 
 export default function KanbanPage() {
-  const { data: session } = useSession();
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [mode, setMode] = useState<Mode>("status");
-  const [confirmSelesai, setConfirmSelesai] = useState<{ id: string; name: string } | null>(null);
+  const [confirmSelesai, setConfirmSelesai] = useState<{ id: string; assName: string } | null>(null);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
-  const [filterPIC, setFilterPIC] = useState("");
+  const [filterLeader, setFilterLeader] = useState("");
   const [filterPriority, setFilterPriority] = useState("");
   const [expandedCols, setExpandedCols] = useState<Set<string>>(new Set());
   const COL_LIMIT = 5;
@@ -60,14 +58,14 @@ export default function KanbanPage() {
       }).then((r) => r.json()),
     onSuccess: (_, vars) => {
       queryClient.invalidateQueries({ queryKey: ["projects"] });
-      if (vars.data.status) toast("success", `Status diperbarui ke ${STATUS_LABELS[vars.data.status as ProjectStatus]}`);
-      if (vars.data.currentFase) toast("success", `Fase diperbarui ke ${FASE_LABELS[vars.data.currentFase as Fase]}`);
+      if (vars.data.status) toast("success", `Status updated to ${STATUS_LABELS[vars.data.status as ProjectStatus]}`);
+      if (vars.data.currentFase) toast("success", `Phase updated to ${FASE_LABELS[vars.data.currentFase as FaseType]}`);
     },
-    onError: () => toast("error", "Gagal memperbarui proyek"),
+    onError: () => toast("error", "Failed to update project"),
   });
 
   const filtered = projects.filter((p) => {
-    if (filterPIC && p.picId !== filterPIC) return false;
+    if (filterLeader && p.projectLeaderId !== filterLeader) return false;
     if (filterPriority && p.priority !== filterPriority) return false;
     return true;
   });
@@ -86,31 +84,24 @@ export default function KanbanPage() {
     const project = projects.find((p) => p.id === draggableId);
     if (!project) return;
 
-    // Access check: bawahan only moves own projects
-    if (session?.user?.role === "BAWAHAN" && project.picId !== session.user.id) return;
-
     const targetId = destination.droppableId;
 
     if (mode === "status") {
       if (targetId === "SELESAI") {
-        setConfirmSelesai({ id: draggableId, name: project.name });
+        setConfirmSelesai({ id: draggableId, assName: project.assName });
         return;
       }
       updateMutation.mutate({ id: draggableId, data: { status: targetId } });
     } else {
       // Fase mode: validate previous fase is 100%
-      const faseOrder: Fase[] = ["RFQ", "DIE_GO", "EVENT_PROJECT", "MASS_PRO"];
-      const targetIdx = faseOrder.indexOf(targetId as Fase);
+      const faseOrder: FaseType[] = ["RFQ", "DIE_GO", "EVENT_PROJECT", "MASS_PRO"];
+      const targetIdx = faseOrder.indexOf(targetId as FaseType);
       if (targetIdx > 0) {
         const prevFase = faseOrder[targetIdx - 1];
-        const prevProgress = {
-          RFQ: project.rfqProgress,
-          DIE_GO: project.dieGoProgress,
-          EVENT_PROJECT: project.eventProjectProgress,
-          MASS_PRO: project.massProProgress,
-        }[prevFase];
-        if ((prevProgress ?? 0) < 100) {
-          toast("error", `Fase ${FASE_LABELS[prevFase]} belum 100% — tidak dapat pindah ke ${FASE_LABELS[targetId as Fase]}`);
+        const prevFaseData = project.fases?.find((f) => f.fase === prevFase);
+        const prevProgress = prevFaseData ? computeFaseProgress(prevFaseData.subFases ?? []) : 0;
+        if (prevProgress < 100) {
+          toast("error", `Phase ${FASE_LABELS[prevFase]} is not 100% complete — cannot move to ${FASE_LABELS[targetId as FaseType]}`);
           return;
         }
       }
@@ -118,7 +109,9 @@ export default function KanbanPage() {
     }
   };
 
-  const uniquePICs = Array.from(new Map(projects.map((p) => [p.picId, p.pic])).values());
+  const uniqueLeaders = Array.from(
+    new Map(projects.map((p) => [p.projectLeaderId, p.projectLeader])).values()
+  ).filter(Boolean);
 
   if (isLoading) {
     return (
@@ -135,7 +128,7 @@ export default function KanbanPage() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-xl font-bold text-gray-900">Kanban Board</h1>
-            <p className="text-sm text-gray-500">{filtered.length} proyek</p>
+            <p className="text-sm text-gray-500">{filtered.length} project(s)</p>
           </div>
 
           {/* Mode toggle */}
@@ -156,7 +149,7 @@ export default function KanbanPage() {
               }`}
             >
               <LayoutGrid className="w-4 h-4" />
-              By Fase
+              By Phase
             </button>
           </div>
         </div>
@@ -164,13 +157,13 @@ export default function KanbanPage() {
         {/* Filters */}
         <div className="flex gap-3">
           <select
-            value={filterPIC}
-            onChange={(e) => setFilterPIC(e.target.value)}
+            value={filterLeader}
+            onChange={(e) => setFilterLeader(e.target.value)}
             className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-700"
           >
-            <option value="">Semua PIC</option>
-            {uniquePICs.map((pic) => pic && (
-              <option key={pic.id} value={pic.id}>{pic.name}</option>
+            <option value="">All Project Leaders</option>
+            {uniqueLeaders.map((leader) => leader && (
+              <option key={leader.id} value={leader.id}>{leader.name}</option>
             ))}
           </select>
           <select
@@ -178,14 +171,14 @@ export default function KanbanPage() {
             onChange={(e) => setFilterPriority(e.target.value)}
             className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-700"
           >
-            <option value="">Semua Prioritas</option>
+            <option value="">All Priorities</option>
             {Object.entries(PRIORITY_LABELS).map(([k, v]) => (
               <option key={k} value={k}>{v}</option>
             ))}
           </select>
-          {(filterPIC || filterPriority) && (
+          {(filterLeader || filterPriority) && (
             <button
-              onClick={() => { setFilterPIC(""); setFilterPriority(""); }}
+              onClick={() => { setFilterLeader(""); setFilterPriority(""); }}
               className="px-3 py-1.5 text-sm text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50"
             >
               Reset
@@ -231,16 +224,12 @@ export default function KanbanPage() {
                             project={project}
                             index={index}
                             onClick={() => setSelectedProject(project)}
-                            isDraggable={
-                              session?.user?.role === "ATASAN" ||
-                              project.picId === session?.user?.id
-                            }
                           />
                         ))}
                         {provided.placeholder}
                         {colProjects.length === 0 && (
                           <div className="py-8 text-center text-gray-400 text-xs">
-                            Tidak ada proyek
+                            No projects
                           </div>
                         )}
                       </div>
@@ -260,7 +249,7 @@ export default function KanbanPage() {
                       }
                       className="mx-3 mb-3 py-1.5 text-xs text-gray-500 hover:text-gray-800 bg-white/60 hover:bg-white/90 rounded-lg border border-current/10 transition-colors"
                     >
-                      {isExpanded ? "Sembunyikan" : `+${hidden} proyek lainnya`}
+                      {isExpanded ? "Show less" : `+${hidden} more project(s)`}
                     </button>
                   )}
                 </div>
@@ -281,7 +270,7 @@ export default function KanbanPage() {
         />
       )}
 
-      {/* Confirm Selesai Modal */}
+      {/* Confirm Complete Modal */}
       {confirmSelesai && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setConfirmSelesai(null)} />
@@ -294,9 +283,9 @@ export default function KanbanPage() {
                 <X className="w-4 h-4" />
               </button>
             </div>
-            <h3 className="text-base font-bold text-gray-900 mb-1">Tandai sebagai Selesai?</h3>
+            <h3 className="text-base font-bold text-gray-900 mb-1">Mark as Completed?</h3>
             <p className="text-sm text-gray-500 mb-5">
-              Proyek <span className="font-medium text-gray-800">{confirmSelesai.name}</span> akan ditandai sebagai selesai.
+              Project <span className="font-medium text-gray-800">{confirmSelesai.assName}</span> will be marked as completed.
             </p>
             <div className="flex gap-3">
               <button
@@ -306,13 +295,13 @@ export default function KanbanPage() {
                 }}
                 className="flex-1 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium transition-colors"
               >
-                Ya, Selesai
+                Yes, Complete
               </button>
               <button
                 onClick={() => setConfirmSelesai(null)}
                 className="flex-1 py-2.5 border border-gray-200 hover:bg-gray-50 text-gray-600 rounded-lg text-sm font-medium transition-colors"
               >
-                Batal
+                Cancel
               </button>
             </div>
           </div>
@@ -326,21 +315,20 @@ function KanbanCard({
   project,
   index,
   onClick,
-  isDraggable,
 }: {
   project: Project;
   index: number;
   onClick: () => void;
-  isDraggable: boolean;
 }) {
-  const daysLeft = getDaysRemaining(project.endDate);
+  const daysLeft = getDaysRemaining(project.targetDate);
   const isLate = daysLeft < 0;
   const isNear = !isLate && daysLeft <= 7;
 
-  const pendingCount = project.hinanhyoDRs?.filter((h) => h.status === "PENDING").length ?? 0;
+  const progress = computeProjectProgress(project.fases ?? []);
+  const pendingCount = project._count?.hinanhyoDRs ?? 0;
 
   return (
-    <Draggable draggableId={project.id} index={index} isDragDisabled={!isDraggable}>
+    <Draggable draggableId={project.id} index={index}>
       {(provided, snapshot) => (
         <div
           ref={provided.innerRef}
@@ -353,28 +341,29 @@ function KanbanCard({
         >
           {/* Top row */}
           <div className="flex items-start justify-between gap-2 mb-2">
-            <span className="font-mono text-xs text-gray-400">{project.code}</span>
+            <span className="font-mono text-xs text-gray-400">{project.assNumber}</span>
             <span className={`inline-flex px-1.5 py-0.5 rounded text-xs font-semibold ${getPriorityColor(project.priority)}`}>
               {PRIORITY_LABELS[project.priority]}
             </span>
           </div>
 
           {/* Name */}
-          <h3 className="text-sm font-semibold text-gray-900 mb-1 leading-snug line-clamp-2">
-            {project.name}
+          <h3 className="text-sm font-semibold text-gray-900 mb-0.5 leading-snug line-clamp-2">
+            {project.assName}
           </h3>
+          <p className="text-xs text-gray-400 mb-1">{project.model}</p>
           <p className="text-xs text-gray-400 mb-3">{project.customer}</p>
 
           {/* Progress */}
           <div className="mb-3">
             <div className="flex items-center justify-between mb-1">
               <span className="text-xs text-gray-500">Progress</span>
-              <span className="text-xs font-semibold text-blue-600">{Math.round(project.overallProgress)}%</span>
+              <span className="text-xs font-semibold text-blue-600">{progress}%</span>
             </div>
             <div className="h-1.5 bg-gray-100 rounded-full">
               <div
                 className="h-1.5 bg-blue-500 rounded-full transition-all"
-                style={{ width: `${project.overallProgress}%` }}
+                style={{ width: `${progress}%` }}
               />
             </div>
           </div>
@@ -383,7 +372,7 @@ function KanbanCard({
           <div className="flex items-center justify-between text-xs">
             <div className="flex items-center gap-1 text-gray-500">
               <Users className="w-3 h-3" />
-              <span className="truncate max-w-20">{project.pic?.name?.split(" ")[0]}</span>
+              <span className="truncate max-w-20">{project.projectLeader?.name?.split(" ")[0]}</span>
             </div>
 
             <div className="flex items-center gap-2">
@@ -396,10 +385,10 @@ function KanbanCard({
               <span className={`flex items-center gap-0.5 font-medium text-xs ${isLate ? "text-red-600" : isNear ? "text-yellow-600" : "text-gray-500"}`}>
                 <Clock className="w-3 h-3 shrink-0" />
                 {isLate
-                  ? `Terlambat ${-daysLeft} hari`
+                  ? `Overdue ${-daysLeft}d`
                   : daysLeft === 0
-                  ? "Hari ini"
-                  : `Sisa ${daysLeft} hari`}
+                  ? "Today"
+                  : `${daysLeft}d left`}
               </span>
             </div>
           </div>

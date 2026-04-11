@@ -38,7 +38,7 @@ enum ProjectStatus {
   TUNDA
 }
 
-enum Fase {
+enum FaseType {
   RFQ
   DIE_GO
   EVENT_PROJECT
@@ -48,6 +48,8 @@ enum Fase {
 enum HinanhyoDRType {
   HINANHYO
   DR
+  KOMARIGOTO
+  VA_VE
 }
 
 enum HinanhyoDRStatus {
@@ -68,11 +70,11 @@ model User {
   createdAt  DateTime    @default(now())
   updatedAt  DateTime    @updatedAt
 
-  projectsAsPIC Project[]    @relation("ProjectPIC")
-  hinanhyoDRs   HinanhyoDR[]
-  activityLogs  ActivityLog[]
-  accounts      Account[]
-  sessions      Session[]
+  projectsAsLeader Project[]   @relation("ProjectLeader")
+  subFasesAsPIC    SubFase[]   @relation("SubFasePIC")
+  activityLogs     ActivityLog[]
+  accounts         Account[]
+  sessions         Session[]
 
   @@map("users")
 }
@@ -118,49 +120,84 @@ model VerificationToken {
 }
 
 model Project {
-  id                   String        @id @default(cuid())
-  code                 String        @unique // PRJ-001, PRJ-002
-  name                 String        @unique
-  description          String?       @db.Text
-  customer             String
-  picId                String
-  priority             Priority      @default(MEDIUM)
-  status               ProjectStatus @default(BELUM_MULAI)
-  currentFase          Fase          @default(RFQ)
-  startDate            DateTime
-  endDate              DateTime
-  kebutuhanMp          Int
-  aktualMp             Int?
-  cycleTimeTarget      Int // in working days
-  cycleTimeAktual      Int? // auto-calculated or manual
-  rfqProgress          Int           @default(0)
-  dieGoProgress        Int           @default(0)
-  eventProjectProgress Int           @default(0)
-  massProProgress      Int           @default(0)
-  overallProgress      Float         @default(0) // (rfq+dieGo+eventProject+massPro) / 4
-  createdAt            DateTime      @default(now())
-  updatedAt            DateTime      @updatedAt
+  id              String        @id @default(cuid())
+  model           String
+  assNumber       String        @unique
+  assName         String        @unique
+  customer        String
+  description     String?       @db.Text
+  projectLeaderId String
+  kebutuhanMp     Int
+  aktualMp        Int?
+  startDate       DateTime
+  targetDate      DateTime
+  priority        Priority      @default(MEDIUM)
+  status          ProjectStatus @default(BELUM_MULAI)
+  currentFase     FaseType      @default(RFQ)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
 
-  pic          User         @relation("ProjectPIC", fields: [picId], references: [id])
-  hinanhyoDRs  HinanhyoDR[]
-  activityLogs ActivityLog[]
+  projectLeader User          @relation("ProjectLeader", fields: [projectLeaderId], references: [id])
+  fases         ProjectFase[]
+  hinanhyoDRs   HinanhyoDR[]
+  activityLogs  ActivityLog[]
 
   @@map("projects")
+}
+
+model ProjectFase {
+  id         String    @id @default(cuid())
+  projectId  String
+  fase       FaseType
+  startDate  DateTime?
+  targetDate DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  project  Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  subFases SubFase[]
+
+  @@unique([projectId, fase])
+  @@map("project_fases")
+}
+
+model SubFase {
+  id                 String    @id @default(cuid())
+  projectFaseId      String
+  projectId          String
+  name               String
+  description        String?   @db.Text
+  picId              String
+  customerStartDate  DateTime?
+  customerTargetDate DateTime?
+  picStartDate       DateTime?
+  picTargetDate      DateTime?
+  documentUrl        String?
+  isDone             Boolean   @default(false)
+  gcalEventId        String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  projectFase ProjectFase  @relation(fields: [projectFaseId], references: [id], onDelete: Cascade)
+  pic         User         @relation("SubFasePIC", fields: [picId], references: [id])
+  hinanhyoDRs HinanhyoDR[]
+
+  @@map("sub_fases")
 }
 
 model HinanhyoDR {
   id          String           @id @default(cuid())
   projectId   String
+  subFaseId   String?
   type        HinanhyoDRType
   title       String
   description String?          @db.Text
   status      HinanhyoDRStatus @default(PENDING)
-  picId       String
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
 
-  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  pic     User    @relation(fields: [picId], references: [id])
+  project Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  subFase SubFase? @relation(fields: [subFaseId], references: [id])
 
   @@map("hinanhyo_dr")
 }

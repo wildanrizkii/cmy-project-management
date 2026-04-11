@@ -16,9 +16,9 @@ export type ProjectStatus =
   | "TERLAMBAT"
   | "TUNDA";
 
-export type Fase = "RFQ" | "DIE_GO" | "EVENT_PROJECT" | "MASS_PRO";
+export type FaseType = "RFQ" | "DIE_GO" | "EVENT_PROJECT" | "MASS_PRO";
 
-export type HinanhyoDRType = "HINANHYO" | "DR";
+export type HinanhyoDRType = "HINANHYO" | "DR" | "KOMARIGOTO" | "VA_VE";
 export type HinanhyoDRStatus = "DITERIMA" | "DITOLAK" | "PENDING";
 
 export interface User {
@@ -30,28 +30,53 @@ export interface User {
   createdAt: string;
 }
 
-export interface Project {
+export interface SubFase {
   id: string;
-  code: string;
+  projectFaseId: string;
+  projectId: string;
   name: string;
   description: string | null;
-  customer: string;
   picId: string;
-  pic: User;
-  priority: Priority;
-  status: ProjectStatus;
-  currentFase: Fase;
-  startDate: string;
-  endDate: string;
+  pic?: User;
+  customerStartDate: string | null;
+  customerTargetDate: string | null;
+  picStartDate: string | null;
+  picTargetDate: string | null;
+  documentUrl: string | null;
+  isDone: boolean;
+  gcalEventId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ProjectFase {
+  id: string;
+  projectId: string;
+  fase: FaseType;
+  startDate: string | null;
+  targetDate: string | null;
+  subFases: SubFase[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Project {
+  id: string;
+  model: string;
+  assNumber: string;
+  assName: string;
+  customer: string;
+  description: string | null;
+  projectLeaderId: string;
+  projectLeader: User;
   kebutuhanMp: number;
   aktualMp: number | null;
-  cycleTimeTarget: number;
-  cycleTimeAktual: number | null;
-  rfqProgress: number;
-  dieGoProgress: number;
-  eventProjectProgress: number;
-  massProProgress: number;
-  overallProgress: number;
+  startDate: string;
+  targetDate: string;
+  priority: Priority;
+  status: ProjectStatus;
+  currentFase: FaseType;
+  fases?: ProjectFase[];
   hinanhyoDRs?: HinanhyoDR[];
   activityLogs?: ActivityLog[];
   createdAt: string;
@@ -64,12 +89,12 @@ export interface Project {
 export interface HinanhyoDR {
   id: string;
   projectId: string;
+  subFaseId: string | null;
+  subFase?: { id: string; name: string } | null;
   type: HinanhyoDRType;
   title: string;
   description: string | null;
   status: HinanhyoDRStatus;
-  picId: string;
-  pic?: User;
   createdAt: string;
   updatedAt: string;
 }
@@ -100,14 +125,14 @@ export const PRIORITY_LABELS: Record<Priority, string> = {
 };
 
 export const STATUS_LABELS: Record<ProjectStatus, string> = {
-  BELUM_MULAI: "Belum Mulai",
-  DALAM_PROSES: "Dalam Proses",
-  SELESAI: "Selesai",
-  TERLAMBAT: "Terlambat",
-  TUNDA: "Tunda",
+  BELUM_MULAI: "Not Started",
+  DALAM_PROSES: "In Progress",
+  SELESAI: "Completed",
+  TERLAMBAT: "Overdue",
+  TUNDA: "On Hold",
 };
 
-export const FASE_LABELS: Record<Fase, string> = {
+export const FASE_LABELS: Record<FaseType, string> = {
   RFQ: "RFQ",
   DIE_GO: "Die Go",
   EVENT_PROJECT: "Event Project",
@@ -115,12 +140,16 @@ export const FASE_LABELS: Record<Fase, string> = {
 };
 
 export const HINANHYO_STATUS_LABELS: Record<HinanhyoDRStatus, string> = {
-  DITERIMA: "Diterima",
-  DITOLAK: "Ditolak",
+  DITERIMA: "Accepted",
+  DITOLAK: "Rejected",
   PENDING: "Pending",
 };
 
 export const HINANHYO_TYPE_LABELS: Record<HinanhyoDRType, string> = {
   HINANHYO: "Hinanhyo",
   DR: "Design Review",
+  KOMARIGOTO: "Komarigoto",
+  VA_VE: "VA/VE",
 };
+
+export const FASE_ORDER: FaseType[] = ["RFQ", "DIE_GO", "EVENT_PROJECT", "MASS_PRO"];

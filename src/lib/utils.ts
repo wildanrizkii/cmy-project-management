@@ -1,6 +1,6 @@
 import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
-import type { Priority, ProjectStatus, Fase, HinanhyoDRStatus } from "@/types";
+import type { Priority, ProjectStatus, FaseType, HinanhyoDRStatus } from "@/types";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -8,7 +8,7 @@ export function cn(...inputs: ClassValue[]) {
 
 export function formatDate(date: Date | string | null | undefined): string {
   if (!date) return "-";
-  return new Date(date).toLocaleDateString("id-ID", {
+  return new Date(date).toLocaleDateString("en-GB", {
     day: "numeric",
     month: "short",
     year: "numeric",
@@ -17,7 +17,7 @@ export function formatDate(date: Date | string | null | undefined): string {
 
 export function formatDateTime(date: Date | string | null | undefined): string {
   if (!date) return "-";
-  return new Date(date).toLocaleString("id-ID", {
+  return new Date(date).toLocaleString("en-GB", {
     day: "numeric",
     month: "short",
     year: "numeric",
@@ -55,14 +55,25 @@ export function getStatusColor(status: ProjectStatus | string): string {
   return map[status] ?? "bg-gray-100 text-gray-700 border-gray-200";
 }
 
-export function getFaseColor(fase: Fase | string): string {
+// Phase colors: RFQ=Blue, Die Go=Green, Event Project=Light green, Mass Pro=Yellow
+export function getFaseColor(fase: FaseType | string): string {
   const map: Record<string, string> = {
-    RFQ: "bg-purple-100 text-purple-700",
-    DIE_GO: "bg-blue-100 text-blue-700",
-    EVENT_PROJECT: "bg-cyan-100 text-cyan-700",
-    MASS_PRO: "bg-green-100 text-green-700",
+    RFQ: "bg-blue-100 text-blue-700",
+    DIE_GO: "bg-green-100 text-green-700",
+    EVENT_PROJECT: "bg-emerald-100 text-emerald-600",
+    MASS_PRO: "bg-yellow-100 text-yellow-700",
   };
   return map[fase] ?? "bg-gray-100 text-gray-700";
+}
+
+export function getFaseChartColor(fase: FaseType | string): string {
+  const map: Record<string, string> = {
+    RFQ: "#3b82f6",        // blue-500
+    DIE_GO: "#22c55e",     // green-500
+    EVENT_PROJECT: "#10b981", // emerald-500
+    MASS_PRO: "#eab308",   // yellow-500
+  };
+  return map[fase] ?? "#6b7280";
 }
 
 export function getHinanhyoStatusColor(status: HinanhyoDRStatus | string): string {
@@ -74,13 +85,18 @@ export function getHinanhyoStatusColor(status: HinanhyoDRStatus | string): strin
   return map[status] ?? "bg-gray-100 text-gray-700";
 }
 
-export function calculateOverallProgress(
-  rfq: number,
-  dieGo: number,
-  eventProject: number,
-  massPro: number
-): number {
-  return Math.round((rfq + dieGo + eventProject + massPro) / 4);
+export function computeProjectProgress(fases: { subFases: { isDone: boolean }[] }[]): number {
+  let total = 0, done = 0;
+  for (const f of fases) {
+    total += f.subFases.length;
+    done += f.subFases.filter((s) => s.isDone).length;
+  }
+  return total > 0 ? Math.round((done / total) * 100) : 0;
+}
+
+export function computeFaseProgress(subFases: { isDone: boolean }[]): number {
+  if (!subFases.length) return 0;
+  return Math.round((subFases.filter((s) => s.isDone).length / subFases.length) * 100);
 }
 
 export function getDaysRemaining(endDate: string): number {
@@ -96,10 +112,4 @@ export function getDaysLate(endDate: string): number {
 
 export function isOverdue(endDate: string, status: ProjectStatus): boolean {
   return getDaysRemaining(endDate) < 0 && status !== "SELESAI";
-}
-
-export function cycleTimeEfficiency(target: number, actual: number | null): string {
-  if (!actual) return "-";
-  const eff = (target / actual) * 100;
-  return eff.toFixed(1) + "%";
 }

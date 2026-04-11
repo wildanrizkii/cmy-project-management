@@ -4,7 +4,6 @@ import { apiFetch } from "@/lib/fetch-client";
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
 import {
   Plus, Trash2, Edit2, X, Loader2, Search, Users, ShieldCheck, UserIcon,
 } from "lucide-react";
@@ -31,7 +30,6 @@ const emptyForm: UserForm = { name: "", email: "", password: "", role: "BAWAHAN"
 
 export default function UsersPage() {
   const { data: session } = useSession();
-  const router = useRouter();
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -45,12 +43,6 @@ export default function UsersPage() {
   const [page, setPage] = useState(1);
   const perPage = 10;
 
-  // Redirect non-ATASAN
-  if (session && session.user.role !== "ATASAN") {
-    router.replace("/dashboard");
-    return null;
-  }
-
   const { data: users = [], isLoading } = useQuery<User[]>({
     queryKey: ["users"],
     queryFn: () => apiFetch("/api/users").then((r) => r.json()),
@@ -60,9 +52,9 @@ export default function UsersPage() {
     mutationFn: (u: User) => apiFetch(`/api/users/${u.id}`, { method: "DELETE" }).then((r) => r.json()),
     onSuccess: (_, u) => {
       queryClient.invalidateQueries({ queryKey: ["users"] });
-      toast("success", `User ${u.name} berhasil dihapus`);
+      toast("success", `User ${u.name} deleted`);
     },
-    onError: () => toast("error", "Gagal menghapus user"),
+    onError: () => toast("error", "Failed to delete user"),
   });
 
   const filtered = users.filter((u) => {
@@ -122,48 +114,45 @@ export default function UsersPage() {
     setSaving(false);
 
     if (!res.ok) {
-      setFormError(data.error ?? "Terjadi kesalahan");
+      setFormError(data.error ?? "An error occurred");
       return;
     }
 
     queryClient.invalidateQueries({ queryKey: ["users"] });
     setShowModal(false);
-    toast("success", editUser ? `User ${form.name} berhasil diperbarui` : `User ${form.name} berhasil ditambahkan`);
+    toast("success", editUser ? `User ${form.name} updated` : `User ${form.name} added`);
   };
 
   const handleDelete = (u: User) => {
     if (u.id === session?.user?.id) return;
-    if (confirm(`Hapus user "${u.name}"? Tindakan ini tidak dapat dibatalkan.`)) {
+    if (confirm(`Delete user "${u.name}"? This action cannot be undone.`)) {
       deleteMutation.mutate(u);
     }
   };
-
-  const atasan = filtered.filter((u) => u.role === "ATASAN").length;
-  const bawahan = filtered.filter((u) => u.role === "BAWAHAN").length;
 
   return (
     <div className="p-6 space-y-5">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Manajemen User</h1>
-          <p className="text-sm text-gray-500 mt-0.5">{users.length} user terdaftar</p>
+          <h1 className="text-2xl font-bold text-gray-900">User Management</h1>
+          <p className="text-sm text-gray-500 mt-0.5">{users.length} user(s) registered</p>
         </div>
         <button
           onClick={openAdd}
           className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors shadow-sm"
         >
           <Plus className="w-4 h-4" />
-          Tambah User
+          Add User
         </button>
       </div>
 
       {/* Stats */}
       <div className="grid grid-cols-3 gap-4">
         {[
-          { label: "Total User", value: users.length, icon: Users, color: "text-blue-600 bg-blue-50" },
-          { label: "Manager", value: users.filter((u) => u.role === "ATASAN").length, icon: ShieldCheck, color: "text-purple-600 bg-purple-50" },
-          { label: "PIC", value: users.filter((u) => u.role === "BAWAHAN").length, icon: UserIcon, color: "text-green-600 bg-green-50" },
+          { label: "Total Users", value: users.length, icon: Users, color: "text-blue-600 bg-blue-50" },
+          { label: "Managers", value: users.filter((u) => u.role === "ATASAN").length, icon: ShieldCheck, color: "text-purple-600 bg-purple-50" },
+          { label: "PICs", value: users.filter((u) => u.role === "BAWAHAN").length, icon: UserIcon, color: "text-green-600 bg-green-50" },
         ].map(({ label, value, icon: Icon, color }) => (
           <div key={label} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 flex items-center gap-4">
             <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${color}`}>
@@ -184,7 +173,7 @@ export default function UsersPage() {
           <input
             value={search}
             onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-            placeholder="Cari nama atau email..."
+            placeholder="Search by name or email..."
             className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
@@ -193,7 +182,7 @@ export default function UsersPage() {
           onChange={(e) => { setFilterRole(e.target.value); setPage(1); }}
           className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-700"
         >
-          <option value="">Semua Role</option>
+          <option value="">All Roles</option>
           {ROLE_OPTIONS.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
         </select>
         {(search || filterRole) && (
@@ -211,7 +200,7 @@ export default function UsersPage() {
         <table className="w-full text-sm">
           <thead className="bg-gray-50 border-b border-gray-100">
             <tr>
-              {["Nama", "Email", "Role", "Department", "Aksi"].map((h) => (
+              {["Name", "Email", "Role", "Department", "Actions"].map((h) => (
                 <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
                   {h}
                 </th>
@@ -223,12 +212,12 @@ export default function UsersPage() {
               <tr>
                 <td colSpan={5} className="py-16 text-center text-gray-400">
                   <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
-                  Memuat data...
+                  Loading...
                 </td>
               </tr>
             ) : paginated.length === 0 ? (
               <tr>
-                <td colSpan={5} className="py-16 text-center text-gray-400">Tidak ada user ditemukan</td>
+                <td colSpan={5} className="py-16 text-center text-gray-400">No users found</td>
               </tr>
             ) : (
               paginated.map((u) => (
@@ -240,7 +229,7 @@ export default function UsersPage() {
                       </div>
                       <span className="font-medium text-gray-900">{u.name}</span>
                       {u.id === session?.user?.id && (
-                        <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-medium">Anda</span>
+                        <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-medium">You</span>
                       )}
                     </div>
                   </td>
@@ -270,7 +259,7 @@ export default function UsersPage() {
                         <button
                           onClick={() => handleDelete(u)}
                           className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
-                          title="Hapus"
+                          title="Delete"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
@@ -287,7 +276,7 @@ export default function UsersPage() {
         {totalPages > 1 && (
           <div className="px-4 py-3 border-t border-gray-100 flex items-center justify-between">
             <p className="text-sm text-gray-500">
-              {(page - 1) * perPage + 1}–{Math.min(page * perPage, filtered.length)} dari {filtered.length} user
+              {(page - 1) * perPage + 1}–{Math.min(page * perPage, filtered.length)} of {filtered.length} users
             </p>
             <div className="flex items-center gap-1">
               <button
@@ -325,7 +314,7 @@ export default function UsersPage() {
           <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md">
             <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100">
               <h2 className="text-lg font-bold text-gray-900">
-                {editUser ? "Edit User" : "Tambah User Baru"}
+                {editUser ? "Edit User" : "Add New User"}
               </h2>
               <button onClick={() => setShowModal(false)} className="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg">
                 <X className="w-5 h-5" />
@@ -338,13 +327,13 @@ export default function UsersPage() {
               )}
 
               <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">Nama Lengkap *</label>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Full Name *</label>
                 <input
                   required
                   value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
                   className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Nama lengkap..."
+                  placeholder="Full name..."
                 />
               </div>
 
@@ -357,14 +346,14 @@ export default function UsersPage() {
                   onChange={(e) => setForm({ ...form, email: e.target.value })}
                   disabled={!!editUser}
                   className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50 disabled:text-gray-400"
-                  placeholder="email@perusahaan.com"
+                  placeholder="email@company.com"
                 />
-                {editUser && <p className="text-xs text-gray-400 mt-1">Email tidak dapat diubah</p>}
+                {editUser && <p className="text-xs text-gray-400 mt-1">Email cannot be changed</p>}
               </div>
 
               <div>
                 <label className="block text-xs font-semibold text-gray-600 mb-1">
-                  {editUser ? "Password Baru (kosongkan jika tidak diubah)" : "Password *"}
+                  {editUser ? "New Password (leave blank to keep current)" : "Password *"}
                 </label>
                 <input
                   required={!editUser}
@@ -373,7 +362,7 @@ export default function UsersPage() {
                   value={form.password}
                   onChange={(e) => setForm({ ...form, password: e.target.value })}
                   className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Minimal 8 karakter"
+                  placeholder="Minimum 8 characters"
                 />
               </div>
 
@@ -408,14 +397,14 @@ export default function UsersPage() {
                   className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
                 >
                   {saving && <Loader2 className="w-4 h-4 animate-spin" />}
-                  {editUser ? "Simpan Perubahan" : "Tambah User"}
+                  {editUser ? "Save Changes" : "Add User"}
                 </button>
                 <button
                   type="button"
                   onClick={() => setShowModal(false)}
                   className="px-5 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 transition-colors"
                 >
-                  Batal
+                  Cancel
                 </button>
               </div>
             </form>

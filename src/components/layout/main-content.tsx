@@ -5,8 +5,10 @@ import { NotificationBell } from "./notification-bell";
 import { ErrorBoundary } from "./error-boundary";
 import { useSession } from "next-auth/react";
 import { usePathname, useRouter } from "next/navigation";
-import { Menu } from "lucide-react";
-import { useState, useEffect } from "react";
+import { Menu, Search, X } from "lucide-react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { apiFetch } from "@/lib/fetch-client";
 
 const PAGE_TITLES: Record<string, string> = {
   "/dashboard": "Dashboard",
@@ -15,6 +17,90 @@ const PAGE_TITLES: Record<string, string> = {
   "/users": "Manajemen User",
   "/profile": "Profil Saya",
 };
+
+type SearchProject = { id: string; assNumber: string; assName: string };
+
+function GlobalSearch() {
+  const router = useRouter();
+  const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Debounce
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedQuery(query), 300);
+    return () => clearTimeout(t);
+  }, [query]);
+
+  const { data: results = [] } = useQuery<SearchProject[]>({
+    queryKey: ["global-search", debouncedQuery],
+    queryFn: () =>
+      debouncedQuery.length >= 1
+        ? apiFetch(`/api/projects?search=${encodeURIComponent(debouncedQuery)}`).then((r) => r.json())
+        : Promise.resolve([]),
+    enabled: debouncedQuery.length >= 1,
+  });
+
+  // Close on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const handleSelect = useCallback((project: SearchProject) => {
+    sessionStorage.setItem("openProjectId", project.id);
+    setOpen(false);
+    setQuery("");
+    router.push("/proyek");
+  }, [router]);
+
+  const showDropdown = open && debouncedQuery.length >= 1;
+
+  return (
+    <div ref={containerRef} className="relative hidden sm:block">
+      <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 w-56 md:w-72">
+        <Search className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+        <input
+          value={query}
+          onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
+          onFocus={() => setOpen(true)}
+          placeholder="Search projects..."
+          className="flex-1 bg-transparent text-sm text-gray-700 placeholder-gray-400 outline-none"
+        />
+        {query && (
+          <button onClick={() => { setQuery(""); setDebouncedQuery(""); }} className="text-gray-400 hover:text-gray-600">
+            <X className="w-3.5 h-3.5" />
+          </button>
+        )}
+      </div>
+
+      {showDropdown && (
+        <div className="absolute top-full left-0 mt-1 w-full min-w-72 bg-white border border-gray-200 rounded-xl shadow-xl z-50 max-h-64 overflow-y-auto">
+          {results.length === 0 ? (
+            <p className="px-4 py-3 text-sm text-gray-400">No projects found</p>
+          ) : (
+            results.map((p) => (
+              <button
+                key={p.id}
+                onClick={() => handleSelect(p)}
+                className="w-full px-4 py-2.5 text-left hover:bg-gray-50 flex items-center gap-3 border-b border-gray-50 last:border-0"
+              >
+                <span className="font-mono text-xs bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded shrink-0">{p.assNumber}</span>
+                <span className="text-sm text-gray-800 truncate">{p.assName}</span>
+              </button>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function MainContent({ children }: { children: React.ReactNode }) {
   const { collapsed, setMobileOpen } = useSidebar();
@@ -52,7 +138,8 @@ export function MainContent({ children }: { children: React.ReactNode }) {
           </button>
           <h2 className="text-sm font-semibold text-gray-700">{title}</h2>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
+          <GlobalSearch />
           <NotificationBell />
           <button
             onClick={() => router.push("/profile")}

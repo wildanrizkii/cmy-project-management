@@ -24,7 +24,7 @@ export default function ProfilePage() {
     setSuccess("");
 
     if (newPassword && newPassword !== confirmPassword) {
-      setError("Konfirmasi password tidak cocok");
+      setError("New password confirmation does not match");
       return;
     }
 
@@ -39,12 +39,12 @@ export default function ProfilePage() {
     setSaving(false);
 
     if (!res.ok) {
-      setError(data.error ?? "Terjadi kesalahan");
+      setError(data.error ?? "An error occurred");
       return;
     }
 
     await update({ name: data.name });
-    setSuccess("Profil berhasil diperbarui");
+    setSuccess("Profile updated successfully");
     setCurrentPassword("");
     setNewPassword("");
     setConfirmPassword("");
@@ -55,8 +55,8 @@ export default function ProfilePage() {
   return (
     <div className="p-6 max-w-2xl space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Profil Saya</h1>
-        <p className="text-sm text-gray-500 mt-0.5">Kelola informasi akun dan keamanan</p>
+        <h1 className="text-2xl font-bold text-gray-900">My Profile</h1>
+        <p className="text-sm text-gray-500 mt-0.5">Manage your account information and security</p>
       </div>
 
       {/* Avatar & info card */}
@@ -88,7 +88,7 @@ export default function ProfilePage() {
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm">
         <div className="px-6 py-4 border-b border-gray-100 flex items-center gap-2">
           <User className="w-4 h-4 text-gray-400" />
-          <h2 className="font-semibold text-gray-900">Edit Profil</h2>
+          <h2 className="font-semibold text-gray-900">Edit Profile</h2>
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-5">
@@ -102,9 +102,8 @@ export default function ProfilePage() {
             </div>
           )}
 
-          {/* Nama */}
           <div>
-            <label className="block text-xs font-semibold text-gray-600 mb-1">Nama Lengkap</label>
+            <label className="block text-xs font-semibold text-gray-600 mb-1">Full Name</label>
             <input
               required
               value={name}
@@ -113,7 +112,6 @@ export default function ProfilePage() {
             />
           </div>
 
-          {/* Email (readonly) */}
           <div>
             <label className="block text-xs font-semibold text-gray-600 mb-1">Email</label>
             <input
@@ -121,46 +119,46 @@ export default function ProfilePage() {
               disabled
               className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm bg-gray-50 text-gray-400"
             />
-            <p className="text-xs text-gray-400 mt-1">Email tidak dapat diubah</p>
+            <p className="text-xs text-gray-400 mt-1">Email cannot be changed</p>
           </div>
 
           {/* Password section */}
           <div className="pt-2 border-t border-gray-100">
             <div className="flex items-center gap-2 mb-4">
               <Lock className="w-4 h-4 text-gray-400" />
-              <p className="text-sm font-semibold text-gray-700">Ganti Password</p>
-              <span className="text-xs text-gray-400">(opsional)</span>
+              <p className="text-sm font-semibold text-gray-700">Change Password</p>
+              <span className="text-xs text-gray-400">(optional)</span>
             </div>
 
             <div className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">Password Saat Ini</label>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Current Password</label>
                 <input
                   type="password"
                   value={currentPassword}
                   onChange={(e) => setCurrentPassword(e.target.value)}
-                  placeholder="Masukkan password saat ini"
+                  placeholder="Enter current password"
                   className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">Password Baru</label>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">New Password</label>
                 <input
                   type="password"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
-                  placeholder="Minimal 8 karakter"
+                  placeholder="Minimum 8 characters"
                   minLength={newPassword ? 8 : undefined}
                   className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">Konfirmasi Password Baru</label>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Confirm New Password</label>
                 <input
                   type="password"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="Ulangi password baru"
+                  placeholder="Repeat new password"
                   className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
@@ -174,7 +172,7 @@ export default function ProfilePage() {
               className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
             >
               {saving && <Loader2 className="w-4 h-4 animate-spin" />}
-              Simpan Perubahan
+              Save Changes
             </button>
           </div>
         </form>
