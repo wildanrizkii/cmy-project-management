@@ -3,7 +3,7 @@ import { apiFetch } from "@/lib/fetch-client";
 
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Calendar, List, LayoutGrid, ChevronLeft, ChevronRight, CheckCircle2, Clock, AlertTriangle, AlertCircle, Info } from "lucide-react";
+import { Calendar, List, LayoutGrid, ChevronLeft, ChevronRight, CheckCircle2, Clock, AlertTriangle, AlertCircle, Info, X } from "lucide-react";
 import { FASE_LABELS } from "@/types";
 import type { FaseType } from "@/types";
 import { formatDate } from "@/lib/utils";
@@ -71,10 +71,79 @@ function EventCard({ event }: { event: CalendarEvent }) {
           {event.daysFromPicTarget < 0
             ? `Overdue by ${Math.abs(event.daysFromPicTarget)} day(s) from PIC target`
             : event.daysFromPicTarget === 0
-            ? "Due today"
-            : `${event.daysFromPicTarget} day(s) remaining`}
+              ? "Due today"
+              : `${event.daysFromPicTarget} day(s) remaining`}
         </p>
       )}
+    </div>
+  );
+}
+
+// Popup Modal Component
+function DayEventsModal({
+  isOpen,
+  onClose,
+  date,
+  events
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  date: Date | null;
+  events: CalendarEvent[];
+}) {
+  if (!isOpen || !date) return null;
+
+  const dateKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+  const formattedDate = date.toLocaleDateString("id-ID", {
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric"
+  });
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+          <div>
+            <h3 className="text-lg font-bold text-gray-900">Events on {formattedDate}</h3>
+            <p className="text-sm text-gray-500">{events.length} event(s)</p>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+          >
+            <X className="w-5 h-5 text-gray-500" />
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto p-6">
+          {events.length === 0 ? (
+            <div className="text-center py-8 text-gray-400">
+              <Calendar className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+              <p>No events on this date</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {events.map((ev) => (
+                <EventCard key={ev.id} event={ev} />
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 rounded-b-2xl">
+          <button
+            onClick={onClose}
+            className="w-full px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+          >
+            Close
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -85,7 +154,10 @@ export default function CalendarPage() {
   const [filterPic, setFilterPic] = useState("");
   const [filterFase, setFilterFase] = useState<FaseType | "">("");
   const [filterStatus, setFilterStatus] = useState("");
-  const [selectedDayKey, setSelectedDayKey] = useState<string | null>(null);
+
+  // State untuk popup
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   const [currentMonth, setCurrentMonth] = useState(() => {
     const now = new Date();
@@ -140,6 +212,29 @@ export default function CalendarPage() {
   const nextMonth = () => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1));
 
   const hasFilters = filterLeader || filterPic || filterFase || filterStatus;
+
+  // Handler untuk klik tanggal
+  const handleDayClick = (day: Date) => {
+    const key = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, "0")}-${String(day.getDate()).padStart(2, "0")}`;
+    const dayEvents = eventsByDate.get(key) ?? [];
+
+    // Buka popup meskipun tidak ada event (menampilkan "No events")
+    setSelectedDate(day);
+    setIsModalOpen(true);
+  };
+
+  // Handler tutup modal
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setSelectedDate(null);
+  };
+
+  // Get events untuk tanggal yang dipilih
+  const selectedDateEvents = useMemo(() => {
+    if (!selectedDate) return [];
+    const key = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, "0")}-${String(selectedDate.getDate()).padStart(2, "0")}`;
+    return eventsByDate.get(key) ?? [];
+  }, [selectedDate, eventsByDate]);
 
   return (
     <div className="p-6 space-y-5">
@@ -278,16 +373,20 @@ export default function CalendarPage() {
               const key = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, "0")}-${String(day.getDate()).padStart(2, "0")}`;
               const dayEvents = eventsByDate.get(key) ?? [];
               const isToday = key === todayKey;
+              const hasEvents = dayEvents.length > 0;
 
               return (
                 <div
                   key={key}
-                  onClick={() => dayEvents.length > 0 && setSelectedDayKey(key)}
-                  className={`min-h-24 p-1.5 ${isToday ? "bg-blue-50/50" : ""} ${dayEvents.length > 0 ? "cursor-pointer hover:bg-gray-50" : ""}`}
+                  onClick={() => handleDayClick(day)}
+                  className={`min-h-24 p-1.5 transition-colors ${isToday ? "bg-blue-50/50" : ""
+                    } ${hasEvents
+                      ? "cursor-pointer hover:bg-blue-50/70"
+                      : "cursor-pointer hover:bg-gray-50"
+                    }`}
                 >
-                  <div className={`text-xs font-semibold mb-1 w-6 h-6 flex items-center justify-center rounded-full ${
-                    isToday ? "bg-blue-600 text-white" : "text-gray-500"
-                  }`}>
+                  <div className={`text-xs font-semibold mb-1 w-6 h-6 flex items-center justify-center rounded-full ${isToday ? "bg-blue-600 text-white" : "text-gray-500"
+                    }`}>
                     {day.getDate()}
                   </div>
                   <div className="space-y-0.5">
@@ -309,6 +408,14 @@ export default function CalendarPage() {
           </div>
         </div>
       )}
+
+      {/* Popup Modal */}
+      <DayEventsModal
+        isOpen={isModalOpen}
+        onClose={handleCloseModal}
+        date={selectedDate}
+        events={selectedDateEvents}
+      />
     </div>
   );
 }

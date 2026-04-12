@@ -161,11 +161,10 @@ export function ProjectDetailModal({ project, onClose, onUpdate }: Props) {
             <button
               key={t.id}
               onClick={() => setTab(t.id)}
-              className={`px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
-                tab === t.id
+              className={`px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${tab === t.id
                   ? "border-blue-600 text-blue-600"
                   : "border-transparent text-gray-500 hover:text-gray-800"
-              }`}
+                }`}
             >
               {t.label}
             </button>
@@ -461,6 +460,7 @@ function FaseSection({ fase, users, projectId, toast, refetch }: {
   toast: (type: "success" | "error", msg: string) => void;
   refetch: () => void;
 }) {
+  console.log("USERS: ", users)
   const [expanded, setExpanded] = useState(fase.fase === "RFQ" || fase.fase === "DIE_GO");
   const [showAddForm, setShowAddForm] = useState(false);
   const [addForm, setAddForm] = useState({ name: "", description: "", picId: "", picStartDate: "", picTargetDate: "", customerStartDate: "", customerTargetDate: "", documentUrl: "" });
@@ -833,9 +833,8 @@ function SubFaseRow({ subFase, users, toast, refetch }: {
       <button
         onClick={toggle}
         disabled={toggling}
-        className={`mt-0.5 w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 transition-colors ${
-          subFase.isDone ? "bg-green-500 border-green-500" : "border-gray-300 hover:border-blue-400"
-        }`}
+        className={`mt-0.5 w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 transition-colors ${subFase.isDone ? "bg-green-500 border-green-500" : "border-gray-300 hover:border-blue-400"
+          }`}
       >
         {toggling ? <Loader2 className="w-3 h-3 animate-spin text-white" /> : subFase.isDone && <Check className="w-3 h-3 text-white" />}
       </button>
