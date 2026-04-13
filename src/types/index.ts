@@ -3,8 +3,11 @@ export type UserRole = "ATASAN" | "BAWAHAN";
 export type Department =
   | "PROJECT_LEADER"
   | "PROJECT_LEADER_COORDINATOR"
-  | "ENGINEER_PRODUCT"
-  | "ENGINEERING_NEW_PART"
+  | "ENGINEERING"
+  | "SALES"
+  | "PPIC"
+  | "PEM"
+  | "QA"
   | "CCO"
   | "PROCUREMENT";
 
@@ -114,8 +117,11 @@ export interface ActivityLog {
 export const DEPARTMENT_LABELS: Record<Department, string> = {
   PROJECT_LEADER: "Project Leader",
   PROJECT_LEADER_COORDINATOR: "Project Leader Coordinator",
-  ENGINEER_PRODUCT: "Engineer Product",
-  ENGINEERING_NEW_PART: "Engineering New Part",
+  ENGINEERING: "Engineering",
+  SALES: "Sales",
+  PPIC: "PPIC",
+  PEM: "PEM",
+  QA: "QA",
   CCO: "CCO",
   PROCUREMENT: "Procurement",
 };
