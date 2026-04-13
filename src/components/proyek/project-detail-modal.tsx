@@ -10,7 +10,6 @@ import {
   formatDate,
   formatDateTime,
   getStatusColor,
-  getPriorityColor,
   getFaseColor,
   getHinanhyoStatusColor,
   computeProjectProgress,
@@ -25,7 +24,7 @@ import {
   DEPARTMENT_LABELS,
   FASE_ORDER,
 } from "@/types";
-import type { Project, HinanhyoDR, HinanhyoDRType, HinanhyoDRStatus, ActivityLog, Department, User, ProjectFase, SubFase, FaseType } from "@/types";
+import type { Project, HinanhyoDR, HinanhyoDRType, HinanhyoDRStatus, ActivityLog, User, ProjectFase, SubFase, FaseType } from "@/types";
 
 interface Props {
   project: Project;
@@ -162,8 +161,8 @@ export function ProjectDetailModal({ project, onClose, onUpdate }: Props) {
               key={t.id}
               onClick={() => setTab(t.id)}
               className={`px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${tab === t.id
-                  ? "border-blue-600 text-blue-600"
-                  : "border-transparent text-gray-500 hover:text-gray-800"
+                ? "border-blue-600 text-blue-600"
+                : "border-transparent text-gray-500 hover:text-gray-800"
                 }`}
             >
               {t.label}
@@ -856,10 +855,10 @@ function SubFaseRow({ subFase, users, toast, refetch }: {
         </div>
       </div>
       <div className="flex items-center gap-0.5 shrink-0">
-        <button onClick={() => setEditing(true)} className="p-1 text-gray-300 hover:text-blue-500 rounded transition-colors">
+        <button onClick={() => setEditing(true)} className="p-1 text-blue-500 hover:text-blue-600 rounded transition-colors">
           <Edit2 className="w-3.5 h-3.5" />
         </button>
-        <button onClick={del} className="p-1 text-gray-300 hover:text-red-500 rounded transition-colors">
+        <button onClick={del} className="p-1 text-red-500 hover:text-red-600 rounded transition-colors">
           <Trash2 className="w-3.5 h-3.5" />
         </button>
       </div>
