@@ -9,10 +9,15 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   const { id } = await params;
   const body = await req.json();
-  const { name, role, department, password } = body;
+  const { name, email, role, department, password } = body;
 
   const updateData: Record<string, unknown> = {};
   if (name) updateData.name = name;
+  if (email) {
+    const existing = await db.user.findFirst({ where: { email, NOT: { id } } });
+    if (existing) return Response.json({ error: "Email already used by another user" }, { status: 409 });
+    updateData.email = email;
+  }
   if (role) updateData.role = role;
   if (department !== undefined) updateData.department = department || null;
   if (password) {

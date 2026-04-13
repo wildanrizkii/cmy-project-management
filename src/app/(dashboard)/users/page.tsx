@@ -96,7 +96,8 @@ export default function UsersPage() {
     if (editUser) {
       const body: Record<string, string> = {
         name: form.name,
-        department: form.department
+        email: form.email,
+        department: form.department,
       };
       // Hanya kirim password jika departemen bisa akses web dan password diisi
       if (canAccessWeb && form.password) body.password = form.password;
@@ -372,11 +373,9 @@ export default function UsersPage() {
                   type="email"
                   value={form.email}
                   onChange={(e) => setForm({ ...form, email: e.target.value })}
-                  disabled={!!editUser}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50 disabled:text-gray-400"
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="email@company.com"
                 />
-                {editUser && <p className="text-xs text-gray-400 mt-1">Email cannot be changed</p>}
               </div>
 
               {/* Alert untuk user yang tidak bisa akses web */}
