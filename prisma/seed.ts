@@ -45,7 +45,7 @@ async function main() {
       email: "agus@perusahaan.com",
       password,
       role: "BAWAHAN",
-      department: "ENGINEER_PRODUCT",
+      department: "ENGINEERING",
     },
   });
 
@@ -55,7 +55,7 @@ async function main() {
       email: "dewi@perusahaan.com",
       password,
       role: "BAWAHAN",
-      department: "ENGINEERING_NEW_PART",
+      department: "ENGINEERING",
     },
   });
 

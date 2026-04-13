@@ -3,17 +3,23 @@ import { db } from "@/lib/db";
 import bcrypt from "bcryptjs";
 import { NextRequest } from "next/server";
 
-const WEB_ACCESS_DEPARTMENTS = ["PROJECT_LEADER", "PROJECT_LEADER_COORDINATOR"] as const;
+const WEB_ACCESS_DEPARTMENTS = [
+  "PROJECT_LEADER",
+  "PROJECT_LEADER_COORDINATOR",
+] as const;
 
 export async function GET(req: NextRequest) {
   const session = await auth();
-  if (!session?.user) return Response.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session?.user)
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
 
   const { searchParams } = new URL(req.url);
   const department = searchParams.get("department");
 
   const users = await db.user.findMany({
-    where: department ? { department: department as typeof WEB_ACCESS_DEPARTMENTS[number] } : undefined,
+    where: department
+      ? { department: department as (typeof WEB_ACCESS_DEPARTMENTS)[number] }
+      : undefined,
     select: {
       id: true,
       name: true,
@@ -29,14 +35,17 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   const session = await auth();
-  if (!session?.user) return Response.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session?.user)
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json();
   const { name, email, password, department } = body;
 
-  // Validasi field wajib
   if (!name || !email || !department) {
-    return Response.json({ error: "Name, email, and department are required" }, { status: 400 });
+    return Response.json(
+      { error: "Name, email, and department are required" },
+      { status: 400 },
+    );
   }
 
   // Cek apakah departemen bisa akses web
@@ -45,38 +54,41 @@ export async function POST(req: NextRequest) {
   // Validasi password hanya untuk departemen dengan akses web
   if (canAccessWeb) {
     if (!password) {
-      return Response.json({ error: "Password is required for Project Leader and Coordinator" }, { status: 400 });
+      return Response.json(
+        { error: "Password is required for Project Leader and Coordinator" },
+        { status: 400 },
+      );
     }
     if (password.length < 8) {
-      return Response.json({ error: "Password must be at least 8 characters" }, { status: 400 });
+      return Response.json(
+        { error: "Password must be at least 8 characters" },
+        { status: 400 },
+      );
     }
   }
 
   // Cek email sudah terdaftar
   const existing = await db.user.findUnique({ where: { email } });
   if (existing) {
-    return Response.json({ error: "Email is already registered" }, { status: 409 });
+    return Response.json(
+      { error: "Email is already registered" },
+      { status: 409 },
+    );
   }
 
-  // Buat user
-  const userData: {
-    name: string;
-    email: string;
-    password?: string;
-    department: string;
-  } = {
-    name,
-    email,
-    department,
-  };
-
   // Hash password hanya jika ada (untuk departemen dengan akses web)
+  let hashedPassword: string | undefined;
   if (canAccessWeb && password) {
-    userData.password = await bcrypt.hash(password, 10);
+    hashedPassword = await bcrypt.hash(password, 10);
   }
 
   const user = await db.user.create({
-    data: userData,
+    data: {
+      name,
+      email,
+      department: department as (typeof WEB_ACCESS_DEPARTMENTS)[number],
+      ...(hashedPassword && { password: hashedPassword }),
+    },
     select: { id: true, name: true, email: true, department: true },
   });
 
