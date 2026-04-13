@@ -18,6 +18,7 @@ enum UserRole {
 
 enum Department {
   PROJECT_LEADER
+  PROJECT_LEADER_COORDINATOR
   ENGINEER_PRODUCT
   ENGINEERING_NEW_PART
   CCO
@@ -70,8 +71,8 @@ model User {
   createdAt  DateTime    @default(now())
   updatedAt  DateTime    @updatedAt
 
-  projectsAsLeader Project[]   @relation("ProjectLeader")
-  subFasesAsPIC    SubFase[]   @relation("SubFasePIC")
+  projectsAsLeader Project[]     @relation("ProjectLeader")
+  subFasesAsPIC    SubFase[]     @relation("SubFasePIC")
   activityLogs     ActivityLog[]
   accounts         Account[]
   sessions         Session[]
@@ -123,7 +124,7 @@ model Project {
   id              String        @id @default(cuid())
   model           String
   assNumber       String        @unique
-  assName         String        @unique
+  assName         String
   customer        String
   description     String?       @db.Text
   projectLeaderId String

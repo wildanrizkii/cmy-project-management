@@ -5,7 +5,7 @@ import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import logoCmw from "~/public/logo-cmw.png";
-import { Building2, Loader2, Eye, EyeOff } from "lucide-react";
+import { Loader2, Eye, EyeOff, ShieldAlert } from "lucide-react";
 
 function GoogleIcon() {
   return (
@@ -54,6 +54,10 @@ function LoginForm() {
       setError(
         "This Google account is not registered. Please contact your administrator.",
       );
+    } else if (err === "unauthorized_department" || err === "forbidden") {
+      setError(
+        "Access denied. Only Project Leader and Project Leader Coordinator can access this system.",
+      );
     } else if (err === "OAuthAccountNotLinked") {
       setError(
         "This email is registered with a password. Please sign in with email & password.",
@@ -77,7 +81,13 @@ function LoginForm() {
     setLoading(false);
 
     if (res?.error) {
-      setError("Incorrect email or password");
+      if (res.error === "unauthorized_department") {
+        setError(
+          "Access denied. Only Project Leader and Project Leader Coordinator can access this system.",
+        );
+      } else {
+        setError("Incorrect email or password");
+      }
     } else {
       router.push("/dashboard");
     }
@@ -98,9 +108,19 @@ function LoginForm() {
           {info}
         </div>
       )}
+
+      {/* ✅ ERROR MESSAGE YANG LEBIH MENONJOL */}
       {error && (
-        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
-          {error}
+        <div className="mb-4 p-4 bg-red-50 border-l-4 border-red-500 rounded-lg">
+          <div className="flex items-start gap-3">
+            <ShieldAlert className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-medium text-red-800">
+                Access Denied
+              </p>
+              <p className="text-sm text-red-700 mt-1">{error}</p>
+            </div>
+          </div>
         </div>
       )}
 

@@ -1,5 +1,11 @@
 import { auth } from "@/lib/auth";
 import { NextResponse } from "next/server";
+import { Department } from "@prisma/client";
+
+const ALLOWED_DEPARTMENTS: Department[] = [
+  "PROJECT_LEADER",
+  "PROJECT_LEADER_COORDINATOR",
+];
 
 export default auth((req) => {
   const { nextUrl, auth: session } = req;
@@ -18,6 +24,12 @@ export default auth((req) => {
 
   if (!isLoggedIn) {
     return NextResponse.redirect(new URL("/login", nextUrl));
+  }
+
+  const userDepartment = session.user?.department as Department | undefined;
+  
+  if (!userDepartment || !ALLOWED_DEPARTMENTS.includes(userDepartment)) {
+    return NextResponse.redirect(new URL("/login?error=forbidden", nextUrl));
   }
 
   return NextResponse.next();

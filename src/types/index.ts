@@ -2,6 +2,7 @@ export type UserRole = "ATASAN" | "BAWAHAN";
 
 export type Department =
   | "PROJECT_LEADER"
+  | "PROJECT_LEADER_COORDINATOR"
   | "ENGINEER_PRODUCT"
   | "ENGINEERING_NEW_PART"
   | "CCO"
@@ -112,6 +113,7 @@ export interface ActivityLog {
 // Label maps for UI display
 export const DEPARTMENT_LABELS: Record<Department, string> = {
   PROJECT_LEADER: "Project Leader",
+  PROJECT_LEADER_COORDINATOR: "Project Leader Coordinator",
   ENGINEER_PRODUCT: "Engineer Product",
   ENGINEERING_NEW_PART: "Engineering New Part",
   CCO: "CCO",
@@ -152,4 +154,9 @@ export const HINANHYO_TYPE_LABELS: Record<HinanhyoDRType, string> = {
   VA_VE: "VA/VE",
 };
 
-export const FASE_ORDER: FaseType[] = ["RFQ", "DIE_GO", "EVENT_PROJECT", "MASS_PRO"];
+export const FASE_ORDER: FaseType[] = [
+  "RFQ",
+  "DIE_GO",
+  "EVENT_PROJECT",
+  "MASS_PRO",
+];

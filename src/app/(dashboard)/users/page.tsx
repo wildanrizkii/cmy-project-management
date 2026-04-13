@@ -5,28 +5,25 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSession } from "next-auth/react";
 import {
-  Plus, Trash2, Edit2, X, Loader2, Search, Users, ShieldCheck, UserIcon,
+  Plus, Trash2, Edit2, X, Loader2, Search, Users, ShieldCheck, UserIcon, AlertTriangle,
 } from "lucide-react";
 import { DEPARTMENT_LABELS } from "@/types";
 import type { User, Department } from "@/types";
 import { useToast } from "@/components/layout/toast-context";
 
-const ROLE_OPTIONS = [
-  { value: "ATASAN", label: "Manager" },
-  { value: "BAWAHAN", label: "PIC" },
-];
-
 const DEPT_OPTIONS = Object.entries(DEPARTMENT_LABELS).map(([value, label]) => ({ value, label }));
+
+// Departemen yang bisa akses web (punya password)
+const WEB_ACCESS_DEPARTMENTS = ["PROJECT_LEADER", "PROJECT_LEADER_COORDINATOR"];
 
 interface UserForm {
   name: string;
   email: string;
   password: string;
-  role: string;
   department: string;
 }
 
-const emptyForm: UserForm = { name: "", email: "", password: "", role: "BAWAHAN", department: "PROJECT_LEADER" };
+const emptyForm: UserForm = { name: "", email: "", password: "", department: "PROJECT_LEADER" };
 
 export default function UsersPage() {
   const { data: session } = useSession();
@@ -34,7 +31,7 @@ export default function UsersPage() {
   const { toast } = useToast();
 
   const [search, setSearch] = useState("");
-  const [filterRole, setFilterRole] = useState("");
+  const [filterDept, setFilterDept] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [editUser, setEditUser] = useState<User | null>(null);
   const [form, setForm] = useState<UserForm>(emptyForm);
@@ -60,12 +57,15 @@ export default function UsersPage() {
   const filtered = users.filter((u) => {
     const q = search.toLowerCase();
     if (q && !u.name.toLowerCase().includes(q) && !u.email.toLowerCase().includes(q)) return false;
-    if (filterRole && u.role !== filterRole) return false;
+    if (filterDept && u.department !== filterDept) return false;
     return true;
   });
 
   const totalPages = Math.ceil(filtered.length / perPage);
   const paginated = filtered.slice((page - 1) * perPage, page * perPage);
+
+  // Cek apakah departemen yang dipilih bisa akses web
+  const canAccessWeb = WEB_ACCESS_DEPARTMENTS.includes(form.department);
 
   const openAdd = () => {
     setEditUser(null);
@@ -80,7 +80,6 @@ export default function UsersPage() {
       name: u.name,
       email: u.email,
       password: "",
-      role: u.role,
       department: u.department ?? "PROJECT_LEADER",
     });
     setFormError("");
@@ -95,18 +94,31 @@ export default function UsersPage() {
     let res: Response;
 
     if (editUser) {
-      const body: Record<string, string> = { name: form.name, role: form.role, department: form.department };
-      if (form.password) body.password = form.password;
+      const body: Record<string, string> = {
+        name: form.name,
+        department: form.department
+      };
+      // Hanya kirim password jika departemen bisa akses web dan password diisi
+      if (canAccessWeb && form.password) body.password = form.password;
+
       res = await apiFetch(`/api/users/${editUser.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
     } else {
+      const body: Record<string, string> = {
+        name: form.name,
+        email: form.email,
+        department: form.department
+      };
+      // Hanya kirim password jika departemen bisa akses web
+      if (canAccessWeb) body.password = form.password;
+
       res = await apiFetch("/api/users", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify(body),
       });
     }
 
@@ -151,8 +163,8 @@ export default function UsersPage() {
       <div className="grid grid-cols-3 gap-4">
         {[
           { label: "Total Users", value: users.length, icon: Users, color: "text-blue-600 bg-blue-50" },
-          { label: "Managers", value: users.filter((u) => u.role === "ATASAN").length, icon: ShieldCheck, color: "text-purple-600 bg-purple-50" },
-          { label: "PICs", value: users.filter((u) => u.role === "BAWAHAN").length, icon: UserIcon, color: "text-green-600 bg-green-50" },
+          { label: "Web Access", value: users.filter((u) => WEB_ACCESS_DEPARTMENTS.includes(u.department ?? "")).length, icon: ShieldCheck, color: "text-purple-600 bg-purple-50" },
+          { label: "PIC Only", value: users.filter((u) => !WEB_ACCESS_DEPARTMENTS.includes(u.department ?? "")).length, icon: UserIcon, color: "text-green-600 bg-green-50" },
         ].map(({ label, value, icon: Icon, color }) => (
           <div key={label} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 flex items-center gap-4">
             <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${color}`}>
@@ -178,16 +190,16 @@ export default function UsersPage() {
           />
         </div>
         <select
-          value={filterRole}
-          onChange={(e) => { setFilterRole(e.target.value); setPage(1); }}
+          value={filterDept}
+          onChange={(e) => { setFilterDept(e.target.value); setPage(1); }}
           className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-700"
         >
-          <option value="">All Roles</option>
-          {ROLE_OPTIONS.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
+          <option value="">All Departments</option>
+          {DEPT_OPTIONS.map((d) => <option key={d.value} value={d.value}>{d.label}</option>)}
         </select>
-        {(search || filterRole) && (
+        {(search || filterDept) && (
           <button
-            onClick={() => { setSearch(""); setFilterRole(""); setPage(1); }}
+            onClick={() => { setSearch(""); setFilterDept(""); setPage(1); }}
             className="px-3 py-2 text-sm text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
           >
             Reset
@@ -200,7 +212,7 @@ export default function UsersPage() {
         <table className="w-full text-sm">
           <thead className="bg-gray-50 border-b border-gray-100">
             <tr>
-              {["Name", "Email", "Role", "Department", "Actions"].map((h) => (
+              {["Name", "Email", "Department", "Web Access", "Actions"].map((h) => (
                 <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
                   {h}
                 </th>
@@ -220,54 +232,59 @@ export default function UsersPage() {
                 <td colSpan={5} className="py-16 text-center text-gray-400">No users found</td>
               </tr>
             ) : (
-              paginated.map((u) => (
-                <tr key={u.id} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-linear-to-br from-blue-500 to-blue-700 flex items-center justify-center shrink-0">
-                        <span className="text-xs font-bold text-white">{u.name.charAt(0).toUpperCase()}</span>
+              paginated.map((u) => {
+                const hasWebAccess = WEB_ACCESS_DEPARTMENTS.includes(u.department ?? "");
+                return (
+                  <tr key={u.id} className="hover:bg-gray-50 transition-colors">
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${hasWebAccess
+                          ? "bg-linear-to-br from-blue-500 to-blue-700"
+                          : "bg-linear-to-br from-gray-400 to-gray-600"
+                          }`}>
+                          <span className="text-xs font-bold text-white">{u.name.charAt(0).toUpperCase()}</span>
+                        </div>
+                        <span className="font-medium text-gray-900">{u.name}</span>
+                        {u.id === session?.user?.id && (
+                          <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-medium">You</span>
+                        )}
                       </div>
-                      <span className="font-medium text-gray-900">{u.name}</span>
-                      {u.id === session?.user?.id && (
-                        <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-medium">You</span>
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-gray-600">{u.email}</td>
-                  <td className="px-4 py-3">
-                    <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${
-                      u.role === "ATASAN"
-                        ? "bg-purple-100 text-purple-700"
-                        : "bg-green-100 text-green-700"
-                    }`}>
-                      {u.role === "ATASAN" ? "Manager" : "PIC"}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-gray-600">
-                    {u.department ? DEPARTMENT_LABELS[u.department as Department] ?? u.department : "-"}
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => openEdit(u)}
-                        className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                        title="Edit"
-                      >
-                        <Edit2 className="w-4 h-4" />
-                      </button>
-                      {u.id !== session?.user?.id && (
+                    </td>
+                    <td className="px-4 py-3 text-gray-600">{u.email}</td>
+                    <td className="px-4 py-3 text-gray-600">
+                      {u.department ? DEPARTMENT_LABELS[u.department as Department] ?? u.department : "-"}
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${hasWebAccess
+                        ? "bg-green-100 text-green-700"
+                        : "bg-gray-100 text-gray-600"
+                        }`}>
+                        {hasWebAccess ? "Yes" : "No"}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-1">
                         <button
-                          onClick={() => handleDelete(u)}
-                          className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
-                          title="Delete"
+                          onClick={() => openEdit(u)}
+                          className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                          title="Edit"
                         >
-                          <Trash2 className="w-4 h-4" />
+                          <Edit2 className="w-4 h-4" />
                         </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))
+                        {u.id !== session?.user?.id && (
+                          <button
+                            onClick={() => handleDelete(u)}
+                            className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                            title="Delete"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })
             )}
           </tbody>
         </table>
@@ -327,6 +344,17 @@ export default function UsersPage() {
               )}
 
               <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Department *</label>
+                <select
+                  value={form.department}
+                  onChange={(e) => setForm({ ...form, department: e.target.value })}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  {DEPT_OPTIONS.map((d) => <option key={d.value} value={d.value}>{d.label}</option>)}
+                </select>
+              </div>
+
+              <div>
                 <label className="block text-xs font-semibold text-gray-600 mb-1">Full Name *</label>
                 <input
                   required
@@ -351,42 +379,31 @@ export default function UsersPage() {
                 {editUser && <p className="text-xs text-gray-400 mt-1">Email cannot be changed</p>}
               </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">
-                  {editUser ? "New Password (leave blank to keep current)" : "Password *"}
-                </label>
-                <input
-                  required={!editUser}
-                  type="password"
-                  minLength={8}
-                  value={form.password}
-                  onChange={(e) => setForm({ ...form, password: e.target.value })}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Minimum 8 characters"
-                />
-              </div>
+              {/* Alert untuk user yang tidak bisa akses web */}
+              {!canAccessWeb && (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-start gap-2">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                  <p className="text-xs text-amber-800">
+                    Users in this department <strong>do not have access to the web</strong>. They can only be assigned as PICs on projects.
+                  </p>
+                </div>
+              )}
 
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">Role *</label>
-                <select
-                  value={form.role}
-                  onChange={(e) => setForm({ ...form, role: e.target.value })}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  {ROLE_OPTIONS.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
-                </select>
-              </div>
-
-              {form.role === "BAWAHAN" && (
+              {/* Field Password hanya muncul untuk departemen dengan akses web */}
+              {canAccessWeb && (
                 <div>
-                  <label className="block text-xs font-semibold text-gray-600 mb-1">Department *</label>
-                  <select
-                    value={form.department}
-                    onChange={(e) => setForm({ ...form, department: e.target.value })}
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">
+                    {editUser ? "New Password (leave blank to keep current)" : "Password *"}
+                  </label>
+                  <input
+                    required={!editUser}
+                    type="password"
+                    minLength={8}
+                    value={form.password}
+                    onChange={(e) => setForm({ ...form, password: e.target.value })}
                     className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    {DEPT_OPTIONS.map((d) => <option key={d.value} value={d.value}>{d.label}</option>)}
-                  </select>
+                    placeholder="Minimum 8 characters"
+                  />
                 </div>
               )}
 
