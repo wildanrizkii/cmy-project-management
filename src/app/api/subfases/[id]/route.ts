@@ -55,12 +55,13 @@ export async function PATCH(
         where: { id: subFase.projectId },
         select: { assNumber: true, assName: true },
       });
-      const pic = await db.user.findUnique({ where: { id: updated.picId }, select: { name: true } });
+      const pic = await db.user.findUnique({ where: { id: updated.picId }, select: { name: true, email: true } });
       const payload = {
         summary: `[${project?.assNumber}] ${effectiveName}`,
         description: `Project: ${project?.assName}\nPIC: ${pic?.name}\nPhase: ${subFase.projectFase.fase}`,
         startDate: newPicStart || newPicTarget,
         endDate: newPicTarget,
+        attendeeEmail: pic?.email ?? undefined,
       };
 
       if (subFase.gcalEventId) {

@@ -47,18 +47,21 @@ export async function createCalendarEvent(payload: {
   description: string;
   startDate: string;
   endDate: string;
+  attendeeEmail?: string;
 }): Promise<string | null> {
   const auth = getAuthedClient();
   if (!auth) return null;
   const calendar = google.calendar({ version: "v3", auth });
   const res = await calendar.events.insert({
     calendarId: "primary",
+    sendUpdates: "all",
     requestBody: {
       summary: payload.summary,
       description: payload.description,
       start: { date: payload.startDate.slice(0, 10) },
       end: { date: payload.endDate.slice(0, 10) },
       reminders: defaultReminders(),
+      attendees: payload.attendeeEmail ? [{ email: payload.attendeeEmail }] : [],
     },
   });
   return res.data.id ?? null;
@@ -69,6 +72,7 @@ export async function updateCalendarEvent(gcalEventId: string, payload: {
   description: string;
   startDate: string;
   endDate: string;
+  attendeeEmail?: string;
 }): Promise<void> {
   const auth = getAuthedClient();
   if (!auth) return;
@@ -76,12 +80,14 @@ export async function updateCalendarEvent(gcalEventId: string, payload: {
   await calendar.events.patch({
     calendarId: "primary",
     eventId: gcalEventId,
+    sendUpdates: "all",
     requestBody: {
       summary: payload.summary,
       description: payload.description,
       start: { date: payload.startDate.slice(0, 10) },
       end: { date: payload.endDate.slice(0, 10) },
       reminders: defaultReminders(),
+      attendees: payload.attendeeEmail ? [{ email: payload.attendeeEmail }] : [],
     },
   });
 }

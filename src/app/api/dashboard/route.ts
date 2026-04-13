@@ -29,16 +29,21 @@ export async function GET(req: NextRequest) {
     },
   });
 
-  // Compute overall progress from subfases
+  // Compute overall progress — each of 4 phases contributes 25%
+  const FASE_ORDER = ["RFQ", "DIE_GO", "EVENT_PROJECT", "MASS_PRO"] as const;
+  const FASE_WEIGHT = 100 / FASE_ORDER.length;
+
   function getProgress(project: typeof allProjects[0]) {
     const fases = project.fases;
     if (!fases.length) return 0;
-    let totalSub = 0, doneSub = 0;
-    for (const f of fases) {
-      totalSub += f.subFases.length;
-      doneSub += f.subFases.filter((s) => s.isDone).length;
+    let total = 0;
+    for (const faseKey of FASE_ORDER) {
+      const f = fases.find((x) => x.fase === faseKey);
+      if (!f || f.subFases.length === 0) continue;
+      const done = f.subFases.filter((s) => s.isDone).length;
+      total += (done / f.subFases.length) * FASE_WEIGHT;
     }
-    return totalSub > 0 ? Math.round((doneSub / totalSub) * 100) : 0;
+    return Math.round(total);
   }
 
   // Apply chart filters
@@ -212,6 +217,21 @@ export async function GET(req: NextRequest) {
     aktual: p.aktualMp ?? 0,
   }));
 
+  const cycleTimeChart = chartProjects
+    .filter((p) => p.startDate && p.targetDate)
+    .map((p) => {
+      const planned = Math.round((new Date(p.targetDate).getTime() - new Date(p.startDate!).getTime()) / 86400000);
+      const elapsed = p.status === "SELESAI"
+        ? planned
+        : Math.round((now.getTime() - new Date(p.startDate!).getTime()) / 86400000);
+      return {
+        code: p.assNumber,
+        name: p.assName,
+        target: Math.max(0, planned),
+        actual: Math.max(0, elapsed),
+      };
+    });
+
   // ─── Filter options ──────────────────────────────────────────────────────────
   const filterOptions = {
     leaders: Array.from(
@@ -241,7 +261,7 @@ export async function GET(req: NextRequest) {
     kpi: { totalAktif, totalTerlambat, totalHinanhyoPending, rataRataProgress, selesaiBulanIni, deadline7Hari },
     alerts,
     subFaseAlerts: { red: redAlerts, orange: orangeAlerts, yellow: yellowAlerts },
-    charts: { statusDist, phaseDist, hinanhyoByProject, mpChart },
+    charts: { statusDist, phaseDist, hinanhyoByProject, mpChart, cycleTimeChart },
     taskMonitoring,
     filterOptions,
   });

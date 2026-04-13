@@ -54,6 +54,7 @@ export async function POST(
         description: `Project: ${project?.assName}\nPIC: ${pic?.name}\nPhase: ${fase.fase}${description ? `\n\n${description}` : ""}`,
         startDate: startIso,
         endDate: picTargetDate,
+        attendeeEmail: pic?.email ?? undefined,
       });
       if (gcalEventId) {
         await db.subFase.update({ where: { id: subFase.id }, data: { gcalEventId } });
@@ -61,6 +62,7 @@ export async function POST(
       }
     } catch (e) {
       console.error("GCal sync error (create):", e);
+      (subFase as Record<string, unknown>)._gcalError = e instanceof Error ? e.message : String(e);
     }
   }
 

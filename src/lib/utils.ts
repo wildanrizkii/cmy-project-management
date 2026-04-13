@@ -85,13 +85,18 @@ export function getHinanhyoStatusColor(status: HinanhyoDRStatus | string): strin
   return map[status] ?? "bg-gray-100 text-gray-700";
 }
 
-export function computeProjectProgress(fases: { subFases: { isDone: boolean }[] }[]): number {
-  let total = 0, done = 0;
-  for (const f of fases) {
-    total += f.subFases.length;
-    done += f.subFases.filter((s) => s.isDone).length;
+const FASE_ORDER = ["RFQ", "DIE_GO", "EVENT_PROJECT", "MASS_PRO"] as const;
+const FASE_WEIGHT = 100 / FASE_ORDER.length; // 25% each
+
+export function computeProjectProgress(fases: { fase: string; subFases: { isDone: boolean }[] }[]): number {
+  let total = 0;
+  for (const faseKey of FASE_ORDER) {
+    const f = fases.find((x) => x.fase === faseKey);
+    if (!f || f.subFases.length === 0) continue;
+    const phaseDone = f.subFases.filter((s) => s.isDone).length;
+    total += (phaseDone / f.subFases.length) * FASE_WEIGHT;
   }
-  return total > 0 ? Math.round((done / total) * 100) : 0;
+  return Math.round(total);
 }
 
 export function computeFaseProgress(subFases: { isDone: boolean }[]): number {
