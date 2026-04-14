@@ -7,11 +7,23 @@ import { X, Loader2 } from "lucide-react";
 import type { User } from "@/types";
 import { DEPARTMENT_LABELS } from "@/types";
 import { useToast } from "@/components/layout/toast-context";
+import type { Customer } from "@/types";
 
 interface Props {
   onClose: () => void;
   onCreate: () => void;
 }
+
+const CUSTOMER_OPTIONS: { value: Customer; label: string }[] = [
+  { value: "AHM", label: "AHM" },
+  { value: "ICHIKOH", label: "ICHIKOH" },
+  { value: "TMMIN", label: "TMMIN" },
+  { value: "ITEC", label: "ITEC" },
+  { value: "MITSUBA", label: "MITSUBA" },
+  { value: "KOITO", label: "KOITO" },
+  { value: "HPM", label: "HPM" },
+  { value: "AJI", label: "AJI" },
+];
 
 export function CreateProjectModal({ onClose, onCreate }: Props) {
   const { toast } = useToast();
@@ -117,13 +129,19 @@ export function CreateProjectModal({ onClose, onCreate }: Props) {
 
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-1">Customer *</label>
-              <input
+              <select
                 required
                 value={form.customer}
-                onChange={(e) => setForm({ ...form, customer: e.target.value })}
+                onChange={(e) => setForm({ ...form, customer: e.target.value as Customer })}
                 className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Customer / client name..."
-              />
+              >
+                <option value="">Select Customer...</option>
+                {CUSTOMER_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
             </div>
 
             <div>

@@ -24,7 +24,7 @@ import {
   DEPARTMENT_LABELS,
   FASE_ORDER,
 } from "@/types";
-import type { Project, HinanhyoDR, HinanhyoDRType, HinanhyoDRStatus, ActivityLog, User, ProjectFase, SubFase, FaseType } from "@/types";
+import type { Project, HinanhyoDR, HinanhyoDRType, HinanhyoDRStatus, ActivityLog, User, ProjectFase, SubFase, FaseType, Customer } from "@/types";
 
 interface Props {
   project: Project;
@@ -32,7 +32,18 @@ interface Props {
   onUpdate: (p: Project) => void;
 }
 
-type Tab = "info" | "phases" | "hinanhyo" | "mp" | "activity";
+type Tab = "info" | "phases" | "hinanhyo" | "mp" | "ct" | "activity";
+
+const CUSTOMER_OPTIONS: { value: Customer; label: string }[] = [
+  { value: "AHM", label: "AHM" },
+  { value: "ICHIKOH", label: "ICHIKOH" },
+  { value: "TMMIN", label: "TMMIN" },
+  { value: "ITEC", label: "ITEC" },
+  { value: "MITSUBA", label: "MITSUBA" },
+  { value: "KOITO", label: "KOITO" },
+  { value: "HPM", label: "HPM" },
+  { value: "AJI", label: "AJI" },
+];
 
 export function ProjectDetailModal({ project, onClose, onUpdate }: Props) {
   const { toast } = useToast();
@@ -105,6 +116,7 @@ export function ProjectDetailModal({ project, onClose, onUpdate }: Props) {
     { id: "phases", label: "Phases & SubPhases" },
     { id: "hinanhyo", label: "Hinanhyo / DR" },
     { id: "mp", label: "Manpower" },
+    { id: "ct", label: "Cycle Time" },
     { id: "activity", label: "Activity Log" },
   ];
 
@@ -176,6 +188,7 @@ export function ProjectDetailModal({ project, onClose, onUpdate }: Props) {
           {tab === "phases" && <PhasesTab detail={detail} users={users} toast={toast} refetch={refetch} queryClient={queryClient} onUpdate={onUpdate} />}
           {tab === "hinanhyo" && <HinanhyoTab detail={detail} toast={toast} refetch={refetch} />}
           {tab === "mp" && <ManpowerTab detail={detail} onUpdate={onUpdate} toast={toast} refetch={refetch} />}
+          {tab === "ct" && <CycleTimeTab detail={detail} onUpdate={onUpdate} toast={toast} refetch={refetch} />}
           {tab === "activity" && <ActivityTab detail={detail} />}
         </div>
       </div>
@@ -345,8 +358,18 @@ function InfoTab({ detail, users, onUpdate, toast, refetch }: {
         </div>
         <div>
           <label className="block text-xs font-semibold text-gray-600 mb-1">Customer</label>
-          <input value={form.customer} onChange={(e) => setForm({ ...form, customer: e.target.value })}
-            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          <select
+            value={form.customer}
+            onChange={(e) => setForm({ ...form, customer: e.target.value })}
+            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="">Select Customer...</option>
+            {CUSTOMER_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
         </div>
         <div>
           <label className="block text-xs font-semibold text-gray-600 mb-1">Project Leader</label>
@@ -876,6 +899,7 @@ function HinanhyoTab({ detail, toast, refetch }: {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ type: "HINANHYO", title: "", description: "", status: "PENDING", subFaseId: "" });
   const [saving, setSaving] = useState(false);
+  const [filterType, setFilterType] = useState<string>("ALL");
 
   const { data: items = [], refetch: refetchHinanhyo } = useQuery<HinanhyoDR[]>({
     queryKey: ["hinanhyo", detail.id],
@@ -883,6 +907,10 @@ function HinanhyoTab({ detail, toast, refetch }: {
   });
 
   const allSubFases = (detail.fases ?? []).flatMap((f) => (f.subFases ?? []).map((sf) => ({ ...sf, faseName: FASE_LABELS[f.fase] })));
+
+  const filteredItems = filterType === "ALL"
+    ? items
+    : items.filter((item) => item.type === filterType);
 
   const add = async () => {
     if (!form.title) { toast("error", "Title is required"); return; }
@@ -924,6 +952,23 @@ function HinanhyoTab({ detail, toast, refetch }: {
           className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-medium">
           <Plus className="w-3.5 h-3.5" /> Add Item
         </button>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <span className="text-xs font-medium text-gray-500">Filter by Type:</span>
+        <select
+          value={filterType}
+          onChange={(e) => setFilterType(e.target.value)}
+          className="border border-gray-200 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+          <option value="ALL">All Types</option>
+          {Object.entries(HINANHYO_TYPE_LABELS).map(([k, v]) => (
+            <option key={k} value={k}>{v}</option>
+          ))}
+        </select>
+        <span className="text-xs text-gray-400 ml-2">
+          Showing {filteredItems.length} of {items.length} items
+        </span>
       </div>
 
       {showForm && (
@@ -970,11 +1015,13 @@ function HinanhyoTab({ detail, toast, refetch }: {
         </div>
       )}
 
-      {items.length === 0 ? (
-        <p className="text-sm text-gray-400 text-center py-8">No items yet</p>
+      {filteredItems.length === 0 ? (  // <-- GANTI: items jadi filteredItems
+        <p className="text-sm text-gray-400 text-center py-8">
+          {items.length === 0 ? "No items yet" : "No items match the selected filter"}
+        </p>
       ) : (
         <div className="space-y-2">
-          {items.map((item) => (
+          {filteredItems.map((item) => (  // <-- GANTI: items jadi filteredItems
             <HinanhyoRow
               key={item.id}
               item={item}
@@ -1167,6 +1214,197 @@ function ManpowerTab({ detail, onUpdate, toast, refetch }: {
           ⚠ Actual MP exceeds required by {detail.aktualMp - detail.kebutuhanMp} person(s) ({Math.round(((detail.aktualMp - detail.kebutuhanMp) / detail.kebutuhanMp) * 100)}% over)
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── Cycle Time Tab ──────────────────────────────────────────────────────────
+
+type CtGroup = { group: string; value: number | null };
+
+const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+
+function getNextGroupLabel(groups: CtGroup[]): string {
+  return ALPHABET[groups.length] ?? `G${groups.length + 1}`;
+}
+
+function CycleTimeTab({ detail, onUpdate, toast, refetch }: {
+  detail: Project;
+  onUpdate: (p: Project) => void;
+  toast: (type: "success" | "error", msg: string) => void;
+  refetch: () => void;
+}) {
+  const rawGroups = Array.isArray(detail.aktualCt) ? (detail.aktualCt as CtGroup[]) : [];
+  const [targetCt, setTargetCt] = useState(detail.targetCt !== null && detail.targetCt !== undefined ? String(detail.targetCt) : "");
+  const [groups, setGroups] = useState<CtGroup[]>(rawGroups);
+  const [savingTarget, setSavingTarget] = useState(false);
+  const [savingGroups, setSavingGroups] = useState(false);
+
+  const saveTarget = async () => {
+    setSavingTarget(true);
+    const res = await apiFetch(`/api/projects/${detail.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ targetCt: targetCt !== "" ? parseFloat(targetCt) : null }),
+    });
+    const data = await res.json();
+    setSavingTarget(false);
+    if (!res.ok) { toast("error", data.error ?? "Update failed"); return; }
+    toast("success", "Target Cycle Time saved");
+    onUpdate(data);
+    refetch();
+  };
+
+  const saveGroups = async () => {
+    setSavingGroups(true);
+    const res = await apiFetch(`/api/projects/${detail.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ aktualCt: groups }),
+    });
+    const data = await res.json();
+    setSavingGroups(false);
+    if (!res.ok) { toast("error", data.error ?? "Update failed"); return; }
+    toast("success", "Actual Cycle Time saved");
+    onUpdate(data);
+    refetch();
+  };
+
+  const addGroup = () => {
+    const label = getNextGroupLabel(groups);
+    setGroups((prev) => [...prev, { group: label, value: null }]);
+  };
+
+  const removeLastGroup = () => {
+    setGroups((prev) => prev.slice(0, -1));
+  };
+
+  const updateGroupValue = (index: number, val: string) => {
+    setGroups((prev) =>
+      prev.map((g, i) => (i === index ? { ...g, value: val !== "" ? parseFloat(val) : null } : g))
+    );
+  };
+
+  return (
+    <div className="space-y-6">
+      <h3 className="font-semibold text-gray-800">Cycle Time</h3>
+
+      {/* Target CT */}
+      <div className="bg-gray-50 rounded-xl border border-gray-200 p-5">
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Target Cycle Time</p>
+        <div className="flex items-center gap-3">
+          <div className="relative">
+            <input
+              type="number"
+              min="0"
+              step="any"
+              value={targetCt}
+              onChange={(e) => setTargetCt(e.target.value)}
+              placeholder="—"
+              className="w-36 border border-gray-200 rounded-lg px-3 py-2 text-lg font-bold text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 pr-14"
+            />
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 font-medium">unit</span>
+          </div>
+          <button
+            onClick={saveTarget}
+            disabled={savingTarget}
+            className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
+          >
+            {savingTarget ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+            Save
+          </button>
+        </div>
+      </div>
+
+      {/* Actual CT per Group */}
+      <div className="bg-gray-50 rounded-xl border border-gray-200 p-5">
+        <div className="flex items-center justify-between mb-4">
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Actual Cycle Time per Group</p>
+          <div className="flex items-center gap-2">
+            {groups.length > 0 && (
+              <button
+                onClick={removeLastGroup}
+                className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"
+              >
+                <Trash2 className="w-3 h-3" />
+                Delete Group {groups[groups.length - 1]?.group}
+              </button>
+            )}
+            {groups.length < 26 && (
+              <button
+                onClick={addGroup}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Add Group
+              </button>
+            )}
+          </div>
+        </div>
+
+        {groups.length === 0 ? (
+          <div className="text-center py-8">
+            <p className="text-sm text-gray-400 mb-3">
+              No groups yet. Click <span className="font-medium text-blue-500">Add Group</span> to create one.
+            </p>
+          </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">
+              {groups.map((g, i) => (
+                <div key={g.group} className="bg-white rounded-lg border border-gray-200 p-3">
+                  <p className="text-xs font-bold text-gray-500 mb-2">
+                    Group <span className="text-blue-600 text-sm">{g.group}</span>
+                  </p>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      min="0"
+                      step="any"
+                      value={g.value !== null && g.value !== undefined ? String(g.value) : ""}
+                      onChange={(e) => updateGroupValue(i, e.target.value)}
+                      placeholder="—"
+                      className="w-full border border-gray-200 rounded px-3 py-1.5 text-sm font-semibold text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 pr-12"
+                    />
+                    <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-gray-400">unit</span>
+                  </div>
+                  {/* {detail.targetCt !== null && detail.targetCt !== undefined && g.value !== null && g.value !== undefined && (
+                    <p className={`text-xs mt-1.5 font-medium ${g.value <= detail.targetCt ? "text-green-600" : "text-red-500"
+                      }`}>
+                      {g.value <= detail.targetCt
+                        ? `✓ ${(detail.targetCt - g.value).toFixed(2)}s di bawah target`
+                        : `⚠ ${(g.value - detail.targetCt).toFixed(2)}s melebihi target`}
+                    </p>
+                  )} */}
+                </div>
+              ))}
+            </div>
+            <div className="flex items-center gap-3 pt-1">
+              <button
+                onClick={saveGroups}
+                disabled={savingGroups}
+                className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
+              >
+                {savingGroups ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                Save All Groups
+              </button>
+              {/* {detail.targetCt !== null && detail.targetCt !== undefined && groups.some(g => g.value !== null) && (() => {
+                const filled = groups.filter(g => g.value !== null);
+                const avg = filled.reduce((sum, g) => sum + (g.value ?? 0), 0) / filled.length;
+                return (
+                  <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${
+                    avg <= detail.targetCt
+                      ? "bg-green-100 text-green-700"
+                      : "bg-red-100 text-red-700"
+                  }`}>
+                    Avg: {avg.toFixed(2)}s {avg <= detail.targetCt ? "✓" : "⚠"}
+                  </span>
+                );
+              })()} */}
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 }

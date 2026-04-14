@@ -16,6 +16,7 @@ import {
   ChevronRight,
   Users,
   Calendar,
+  Timer,
   X,
 } from "lucide-react";
 import { DEPARTMENT_LABELS } from "@/types";
@@ -28,6 +29,7 @@ const navItems = [
   { href: "/proyek", label: "Projects", icon: FolderKanban },
   { href: "/kanban", label: "Kanban Board", icon: Kanban },
   { href: "/calendar", label: "Calendar of Events", icon: Calendar },
+  { href: "/cycle-time", label: "Cycle Time", icon: Timer },
   { href: "/users", label: "User Management", icon: Users },
 ];
 

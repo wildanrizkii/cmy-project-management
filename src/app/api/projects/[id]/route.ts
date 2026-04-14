@@ -60,6 +60,7 @@ export async function PATCH(
   const {
     model, assName, assNumber, customer, description, projectLeaderId,
     priority, status, currentFase, startDate, targetDate, kebutuhanMp, aktualMp,
+    targetCt, aktualCt,
   } = body;
 
   const updateData: Record<string, unknown> = {};
@@ -76,6 +77,8 @@ export async function PATCH(
   if (targetDate !== undefined) updateData.targetDate = new Date(targetDate);
   if (kebutuhanMp !== undefined) updateData.kebutuhanMp = parseInt(kebutuhanMp);
   if (aktualMp !== undefined) updateData.aktualMp = aktualMp ? parseInt(aktualMp) : null;
+  if (targetCt !== undefined) updateData.targetCt = targetCt !== null ? parseFloat(targetCt) : null;
+  if (aktualCt !== undefined) updateData.aktualCt = aktualCt;
 
   const updated = await db.project.update({
     where: { id },

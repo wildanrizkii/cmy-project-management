@@ -11,6 +11,16 @@ export type Department =
   | "CCO"
   | "PROCUREMENT";
 
+export type Customer =
+  | "AHM"
+  | "ICHIKOH"
+  | "TMMIN"
+  | "ITEC"
+  | "MITSUBA"
+  | "KOITO"
+  | "HPM"
+  | "AJI";
+
 export type Priority = "HIGH" | "MEDIUM" | "LOW";
 
 export type ProjectStatus =
@@ -75,6 +85,8 @@ export interface Project {
   projectLeader: User;
   kebutuhanMp: number;
   aktualMp: number | null;
+  targetCt: number | null;
+  aktualCt: { group: string; value: number | null }[] | null;
   startDate: string;
   targetDate: string;
   priority: Priority;

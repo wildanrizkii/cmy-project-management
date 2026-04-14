@@ -133,6 +133,8 @@ model Project {
   projectLeaderId String
   kebutuhanMp     Int
   aktualMp        Int?
+  targetCt        Float?
+  aktualCt        Json?
   startDate       DateTime
   targetDate      DateTime
   priority        Priority      @default(MEDIUM)
