@@ -6,6 +6,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Search, Download, Save, Loader2, Timer, X } from "lucide-react";
 import * as XLSX from "xlsx";
 import { useToast } from "@/components/layout/toast-context";
+import { CycleTimeChart } from "@/components/cycletime";
 import type { Project } from "@/types";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -339,6 +340,8 @@ export default function CycleTimePage() {
           )}
         </div>
       </div>
+
+      <CycleTimeChart projects={filtered} height={450} />
 
       {/* Table */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
