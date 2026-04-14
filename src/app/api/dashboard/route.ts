@@ -217,20 +217,13 @@ export async function GET(req: NextRequest) {
     aktual: p.aktualMp ?? 0,
   }));
 
-  const cycleTimeChart = chartProjects
-    .filter((p) => p.startDate && p.targetDate)
-    .map((p) => {
-      const planned = Math.round((new Date(p.targetDate).getTime() - new Date(p.startDate!).getTime()) / 86400000);
-      const elapsed = p.status === "SELESAI"
-        ? planned
-        : Math.round((now.getTime() - new Date(p.startDate!).getTime()) / 86400000);
-      return {
-        code: p.assNumber,
-        name: p.assName,
-        target: Math.max(0, planned),
-        actual: Math.max(0, elapsed),
-      };
-    });
+  const ctProjects = chartProjects.map((p) => ({
+    id: p.id,
+    assNumber: p.assNumber,
+    assName: p.assName,
+    targetCt: (p as unknown as { targetCt: number | null }).targetCt ?? null,
+    aktualCt: (p as unknown as { aktualCt: unknown }).aktualCt ?? null,
+  }));
 
   // ─── Filter options ──────────────────────────────────────────────────────────
   const filterOptions = {
@@ -261,7 +254,7 @@ export async function GET(req: NextRequest) {
     kpi: { totalAktif, totalTerlambat, totalHinanhyoPending, rataRataProgress, selesaiBulanIni, deadline7Hari },
     alerts,
     subFaseAlerts: { red: redAlerts, orange: orangeAlerts, yellow: yellowAlerts },
-    charts: { statusDist, phaseDist, hinanhyoByProject, mpChart, cycleTimeChart },
+    charts: { statusDist, phaseDist, hinanhyoByProject, mpChart, ctProjects },
     taskMonitoring,
     filterOptions,
   });

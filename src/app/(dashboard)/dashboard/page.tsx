@@ -30,6 +30,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { STATUS_LABELS, FASE_LABELS } from "@/types";
+import { CycleTimeChart } from "@/components/cycletime";
 
 const STATUS_COLORS: Record<string, string> = {
   BELUM_MULAI: "#94a3b8",
@@ -493,50 +494,8 @@ export default function DashboardPage() {
         </div>
 
         {/* Cycle Time */}
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
-          <h2 className="text-sm font-semibold text-gray-900 mb-1 flex items-center gap-2">
-            <Clock className="w-4 h-4 text-purple-600" />
-            Cycle Time (days)
-          </h2>
-          <p className="text-xs text-gray-400 mb-3">Target vs actual duration per project</p>
-          {(charts.cycleTimeChart ?? []).length === 0 ? (
-            <div className="h-40 flex items-center justify-center text-gray-400 text-sm">No cycle time data</div>
-          ) : (
-            <div className="overflow-x-auto">
-              <BarChart width={Math.max(500, (charts.cycleTimeChart ?? []).length * 70)} height={220} data={charts.cycleTimeChart ?? []} margin={{ top: 20, left: -10, right: 8, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="code" fontSize={11} />
-                <YAxis fontSize={11} allowDecimals={false} />
-                <Tooltip
-                  content={(props) => {
-                    const { active, payload } = props as AnyTooltipProps;
-                    if (!active || !payload?.length) return null;
-                    const d = payload[0]?.payload as { code: string; name: string; target: number; actual: number };
-                    return (
-                      <div className="bg-white border border-gray-200 shadow-xl rounded-xl p-3 text-xs max-w-52">
-                        <p className="font-semibold text-gray-900 mb-1.5 truncate">
-                          <span className="font-mono">{d.code}</span> — {d.name}
-                        </p>
-                        <p className="flex justify-between gap-4">
-                          <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-purple-300 inline-block" />Target</span>
-                          <span className="font-semibold text-purple-700">{d.target} days</span>
-                        </p>
-                        <p className="flex justify-between gap-4 mt-0.5">
-                          <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-purple-600 inline-block" />Actual</span>
-                          <span className={`font-semibold ${d.actual > d.target ? "text-red-600" : "text-purple-700"}`}>{d.actual} days</span>
-                        </p>
-                      </div>
-                    );
-                  }}
-                />
-                <Legend fontSize={11} />
-                <Bar dataKey="target" name="Target" fill="#d8b4fe" radius={[4, 4, 0, 0]} isAnimationActive={false}
-                  label={{ position: "top", fontSize: 10, fontWeight: "bold", fill: "#7e22ce" }} />
-                <Bar dataKey="actual" name="Actual" fill="#9333ea" radius={[4, 4, 0, 0]} isAnimationActive={false}
-                  label={{ position: "top", fontSize: 10, fontWeight: "bold", fill: "#6b21a8" }} />
-              </BarChart>
-            </div>
-          )}
+        <div className="min-w-0">
+          <CycleTimeChart projects={charts.ctProjects ?? []} height={300} />
         </div>
       </div>
 

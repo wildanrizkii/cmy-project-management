@@ -179,14 +179,18 @@ export async function POST(req: NextRequest) {
     });
 
     // ✅ LOG ACTIVITY
-    await db.activityLog.create({
-      data: {
-        projectId: project.id,
-        userId: session.user.id,
-        action: "Project Created",
-        detail: `Project ${assNumber} - ${assName} created`,
-      },
-    });
+    try {
+      await db.activityLog.create({
+        data: {
+          projectId: project.id,
+          userId: session.user.id,
+          action: "Project Created",
+          detail: `Project ${assNumber} - ${assName} created`,
+        },
+      });
+    } catch (logErr) {
+      console.error("ActivityLog error (non-critical):", logErr);
+    }
 
     return Response.json(project, { status: 201 });
   } catch (error) {

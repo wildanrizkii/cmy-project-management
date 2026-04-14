@@ -5,6 +5,7 @@ import {
     ComposedChart,
     Bar,
     Line,
+    ReferenceLine,
     XAxis,
     YAxis,
     CartesianGrid,
@@ -75,7 +76,7 @@ function CustomTooltip({ active, payload }: TooltipProps) {
             .sort();
 
         return (
-            <div className="bg-white p-3 border border-gray-200 rounded-lg shadow-lg">
+            <div style={{ backgroundColor: "#ffffff", border: "1px solid #e5e7eb", borderRadius: "8px", padding: "12px", boxShadow: "0 10px 25px rgba(0,0,0,0.15)", zIndex: 9999, position: "relative", minWidth: "160px" }}>
                 <p className="font-semibold text-gray-900 mb-1">{data.name}</p>
                 <p className="text-xs text-gray-500 mb-3">{data.assNumber}</p>
 
@@ -165,8 +166,24 @@ export function CycleTimeChart({ projects, height = 400 }: CycleTimeChartProps) 
         });
     }, [projects, allGroupLabels]);
 
-    if (projects.length === 0 || allGroupLabels.length === 0) {
-        return null;
+    // Use first non-null targetCt as the reference line value
+    const targetCtValue = useMemo(() => {
+        const vals = projects.map((p) => p.targetCt).filter((v): v is number => v !== null && v !== undefined);
+        if (!vals.length) return null;
+        return vals[0];
+    }, [projects]);
+
+    if (projects.length === 0) {
+        return (
+            <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
+                <h3 className="text-lg font-bold text-gray-900 mb-4 text-center">
+                    Cycle Time
+                </h3>
+                <div className="flex items-center justify-center text-gray-400 text-sm" style={{ height }}>
+                    No cycle time data for the selected filter
+                </div>
+            </div>
+        );
     }
 
     return (
@@ -195,7 +212,10 @@ export function CycleTimeChart({ projects, height = 400 }: CycleTimeChartProps) 
                         tick={{ fill: "#6b7280", fontSize: 12 }}
                     />
 
-                    <Tooltip content={<CustomTooltip />} />
+                    <Tooltip
+                        content={<CustomTooltip />}
+                        wrapperStyle={{ zIndex: 9999, outline: "none" }}
+                    />
 
                     <Legend
                         verticalAlign="bottom"
@@ -208,22 +228,35 @@ export function CycleTimeChart({ projects, height = 400 }: CycleTimeChartProps) 
                         <Bar
                             key={label}
                             dataKey={`group_${label}`}
-                            name={`Cycle time Actual/group ${label}`}
+                            name={`Group ${label}`}
                             fill={getGroupColor(index)}
                             radius={[4, 4, 0, 0]}
                             maxBarSize={40}
                         />
                     ))}
 
-                    <Line
-                        type="monotone"
-                        dataKey="targetCt"
-                        name="Cycle time Target"
-                        stroke="#3b82f6"
-                        strokeWidth={3}
-                        dot={{ fill: "#3b82f6", strokeWidth: 2, r: 4 }}
-                        activeDot={{ r: 6, stroke: "#3b82f6", strokeWidth: 2 }}
-                    />
+                    {projects.length > 1 ? (
+                        <Line
+                            type="monotone"
+                            dataKey="targetCt"
+                            name="Target CT"
+                            stroke="#3b82f6"
+                            strokeWidth={3}
+                            connectNulls={true}
+                            dot={{ fill: "#3b82f6", strokeWidth: 2, r: 4 }}
+                            activeDot={{ r: 6, stroke: "#3b82f6", strokeWidth: 2 }}
+                        />
+                    ) : (
+                        targetCtValue !== null && (
+                            <ReferenceLine
+                                y={targetCtValue}
+                                stroke="#3b82f6"
+                                strokeWidth={2.5}
+                                strokeDasharray="6 3"
+                                label={{ value: `Target: ${targetCtValue}s`, position: "insideTopRight", fill: "#3b82f6", fontSize: 11, fontWeight: "bold" }}
+                            />
+                        )
+                    )}
                 </ComposedChart>
             </ResponsiveContainer>
         </div>
