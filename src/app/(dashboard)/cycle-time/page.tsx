@@ -253,11 +253,11 @@ export default function CycleTimePage() {
         "Assy Name": p.assName,
         Customer: p.customer,
         "Project Leader": p.projectLeader?.name ?? "-",
-        "Target CT (s)": p.targetCt ?? "-",
+        "Target CT": p.targetCt ?? "-",
       };
       groupLabels.forEach((label) => {
         const g = groups.find((x) => x.group === label);
-        row[`Group ${label} (s)`] = g?.value ?? "-";
+        row[`Group ${label}`] = g?.value ?? "-";
       });
       return row;
     });
@@ -364,10 +364,10 @@ export default function CycleTimePage() {
                     key={label}
                     className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap"
                   >
-                    Grup {label} <span className="font-normal text-gray-400"></span>
+                    Group {label} <span className="font-normal text-gray-400"></span>
                   </th>
                 ))}
-                <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Aksi</th>
+                <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
@@ -375,13 +375,13 @@ export default function CycleTimePage() {
                 <tr>
                   <td colSpan={5 + groupLabels.length + 1} className="py-16 text-center text-gray-400">
                     <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
-                    Memuat...
+                    Loading...
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
                   <td colSpan={5 + groupLabels.length + 1} className="py-16 text-center text-gray-400">
-                    Tidak ada data ditemukan
+                    No data found
                   </td>
                 </tr>
               ) : (
@@ -465,7 +465,7 @@ export default function CycleTimePage() {
             </span>
             <span className="text-xs font-semibold text-gray-500 flex items-center gap-1.5">
               <span className="w-2.5 h-2.5 rounded-full bg-gray-300 inline-block" />
-              — = Tidak ada data
+              — = No data
             </span>
           </div>
         )}
