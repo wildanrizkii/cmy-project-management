@@ -45,7 +45,7 @@ function EditCtModal({
   const [targetCt, setTargetCt] = useState(
     project.targetCt !== null && project.targetCt !== undefined
       ? String(project.targetCt)
-      : ""
+      : "",
   );
   const [groups, setGroups] = useState<CtGroup[]>(rawGroups);
   const [saving, setSaving] = useState(false);
@@ -62,8 +62,8 @@ function EditCtModal({
   const updateValue = (i: number, val: string) =>
     setGroups((prev) =>
       prev.map((g, idx) =>
-        idx === i ? { ...g, value: val !== "" ? parseFloat(val) : null } : g
-      )
+        idx === i ? { ...g, value: val !== "" ? parseFloat(val) : null } : g,
+      ),
     );
 
   const save = async () => {
@@ -78,7 +78,10 @@ function EditCtModal({
     });
     const data = await res.json();
     setSaving(false);
-    if (!res.ok) { toast("error", data.error ?? "Update failed"); return; }
+    if (!res.ok) {
+      toast("error", data.error ?? "Update failed");
+      return;
+    }
     toast("success", "Cycle Time has been saved");
     onSaved(data);
     onClose();
@@ -86,15 +89,25 @@ function EditCtModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      <div
+        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+        onClick={onClose}
+      />
       <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg">
         {/* Header */}
         <div className="flex items-start justify-between px-6 py-4 border-b border-gray-100">
           <div>
-            <p className="text-xs text-gray-400 font-mono">{project.assNumber}</p>
-            <h3 className="font-bold text-gray-900 mt-0.5">{project.assName}</h3>
+            <p className="text-xs text-gray-400 font-mono">
+              {project.assNumber}
+            </p>
+            <h3 className="font-bold text-gray-900 mt-0.5">
+              {project.assName}
+            </h3>
           </div>
-          <button onClick={onClose} className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100">
+          <button
+            onClick={onClose}
+            className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100"
+          >
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -115,7 +128,9 @@ function EditCtModal({
                 placeholder="—"
                 className="w-full border border-gray-200 rounded-lg px-3 py-2 text-base font-bold text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 pr-14"
               />
-              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 font-medium">unit</span>
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 font-medium">
+                unit
+              </span>
             </div>
           </div>
 
@@ -147,16 +162,22 @@ function EditCtModal({
 
             {groups.length === 0 ? (
               <p className="text-sm text-gray-400 py-4 text-center">
-                Belum ada group. Klik <span className="text-blue-500 font-medium">+ Add Group</span>.
+                Belum ada group. Klik{" "}
+                <span className="text-blue-500 font-medium">+ Add Group</span>.
               </p>
             ) : (
               <div className="grid grid-cols-3 gap-2">
                 {groups.map((g, i) => {
                   const target = targetCt !== "" ? parseFloat(targetCt) : null;
-                  const over = target !== null && g.value !== null && g.value > target;
-                  const under = target !== null && g.value !== null && g.value <= target;
+                  const over =
+                    target !== null && g.value !== null && g.value > target;
+                  const under =
+                    target !== null && g.value !== null && g.value <= target;
                   return (
-                    <div key={g.group} className={`rounded-lg border p-2.5 ${over ? "border-red-200 bg-red-50" : under ? "border-green-200 bg-green-50" : "border-gray-200 bg-gray-50"}`}>
+                    <div
+                      key={g.group}
+                      className={`rounded-lg border p-2.5 ${over ? "border-red-200 bg-red-50" : under ? "border-green-200 bg-green-50" : "border-gray-200 bg-gray-50"}`}
+                    >
                       <p className="text-xs font-bold text-gray-500 mb-1.5">
                         Group <span className="text-blue-600">{g.group}</span>
                       </p>
@@ -165,12 +186,16 @@ function EditCtModal({
                           type="number"
                           min="0"
                           step="any"
-                          value={g.value !== null && g.value !== undefined ? String(g.value) : ""}
+                          value={
+                            g.value !== null && g.value !== undefined
+                              ? String(g.value)
+                              : ""
+                          }
                           onChange={(e) => updateValue(i, e.target.value)}
                           placeholder="—"
                           className="w-full border border-gray-200 rounded px-2 py-1 text-sm font-semibold bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 pr-9"
                         />
-                        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-400">s</span>
+                        {/* <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-400">s</span> */}
                       </div>
                     </div>
                   );
@@ -187,10 +212,17 @@ function EditCtModal({
             disabled={saving}
             className="flex items-center gap-1.5 px-5 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
           >
-            {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+            {saving ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <Save className="w-3.5 h-3.5" />
+            )}
             Save
           </button>
-          <button onClick={onClose} className="px-5 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-100 transition-colors">
+          <button
+            onClick={onClose}
+            className="px-5 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-100 transition-colors"
+          >
             Cancel
           </button>
         </div>
@@ -225,8 +257,7 @@ export default function CycleTimePage() {
         p.assName.toLowerCase().includes(q);
       const matchCustomer = !filterCustomer || p.customer === filterCustomer;
       const matchLeader =
-        !filterLeader ||
-        (p.projectLeader?.name ?? "") === filterLeader;
+        !filterLeader || (p.projectLeader?.name ?? "") === filterLeader;
       return matchSearch && matchCustomer && matchLeader;
     });
   }, [projects, search, filterCustomer, filterLeader]);
@@ -234,11 +265,16 @@ export default function CycleTimePage() {
   // Unique values for dropdowns
   const customers = useMemo(
     () => [...new Set(projects.map((p) => p.customer))].sort(),
-    [projects]
+    [projects],
   );
   const leaders = useMemo(
-    () => [...new Set(projects.map((p) => p.projectLeader?.name ?? "").filter(Boolean))].sort(),
-    [projects]
+    () =>
+      [
+        ...new Set(
+          projects.map((p) => p.projectLeader?.name ?? "").filter(Boolean),
+        ),
+      ].sort(),
+    [projects],
   );
 
   // Collect ALL group labels across filtered projects
@@ -264,7 +300,10 @@ export default function CycleTimePage() {
     const ws = XLSX.utils.json_to_sheet(rows);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Cycle Time");
-    XLSX.writeFile(wb, `cycle-time-${new Date().toISOString().slice(0, 10)}.xlsx`);
+    XLSX.writeFile(
+      wb,
+      `cycle-time-${new Date().toISOString().slice(0, 10)}.xlsx`,
+    );
     toast("success", "Export success");
   };
 
@@ -280,7 +319,9 @@ export default function CycleTimePage() {
           </div>
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Cycle Time</h1>
-            <p className="text-sm text-gray-500 mt-0.5">{filtered.length} project(s)</p>
+            <p className="text-sm text-gray-500 mt-0.5">
+              {filtered.length} project(s)
+            </p>
           </div>
         </div>
         <button
@@ -314,7 +355,9 @@ export default function CycleTimePage() {
           >
             <option value="">All Customer</option>
             {customers.map((c) => (
-              <option key={c} value={c}>{c}</option>
+              <option key={c} value={c}>
+                {c}
+              </option>
             ))}
           </select>
 
@@ -326,13 +369,19 @@ export default function CycleTimePage() {
           >
             <option value="">All Project Leader</option>
             {leaders.map((l) => (
-              <option key={l} value={l}>{l}</option>
+              <option key={l} value={l}>
+                {l}
+              </option>
             ))}
           </select>
 
           {hasFilter && (
             <button
-              onClick={() => { setSearch(""); setFilterCustomer(""); setFilterLeader(""); }}
+              onClick={() => {
+                setSearch("");
+                setFilterCustomer("");
+                setFilterLeader("");
+              }}
               className="px-3 py-2 text-sm text-gray-500 hover:text-gray-800 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
             >
               Reset
@@ -350,10 +399,18 @@ export default function CycleTimePage() {
             <thead className="bg-gray-50 border-b border-gray-100">
               <tr>
                 {/* Fixed columns */}
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Assy Number</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Assy Name</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Customer</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Project Leader</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">
+                  Assy Number
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">
+                  Assy Name
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">
+                  Customer
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">
+                  Project Leader
+                </th>
                 {/* Target CT */}
                 <th className="px-4 py-3 text-center text-xs font-semibold text-blue-600 uppercase tracking-wider whitespace-nowrap bg-blue-50/50">
                   Target CT <span className="font-normal text-gray-400"></span>
@@ -364,23 +421,32 @@ export default function CycleTimePage() {
                     key={label}
                     className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap"
                   >
-                    Group {label} <span className="font-normal text-gray-400"></span>
+                    Group {label}{" "}
+                    <span className="font-normal text-gray-400"></span>
                   </th>
                 ))}
-                <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Action</th>
+                <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">
+                  Action
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
               {isLoading ? (
                 <tr>
-                  <td colSpan={5 + groupLabels.length + 1} className="py-16 text-center text-gray-400">
+                  <td
+                    colSpan={5 + groupLabels.length + 1}
+                    className="py-16 text-center text-gray-400"
+                  >
                     <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
                     Loading...
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={5 + groupLabels.length + 1} className="py-16 text-center text-gray-400">
+                  <td
+                    colSpan={5 + groupLabels.length + 1}
+                    className="py-16 text-center text-gray-400"
+                  >
                     No data found
                   </td>
                 </tr>
@@ -390,7 +456,10 @@ export default function CycleTimePage() {
                   const target = p.targetCt;
 
                   return (
-                    <tr key={p.id} className="hover:bg-gray-50/70 transition-colors">
+                    <tr
+                      key={p.id}
+                      className="hover:bg-gray-50/70 transition-colors"
+                    >
                       {/* Assy Number */}
                       <td className="px-4 py-3 font-mono font-medium text-gray-600 text-xs whitespace-nowrap">
                         {p.assNumber}
@@ -398,10 +467,14 @@ export default function CycleTimePage() {
                       {/* Assy Name */}
                       <td className="px-4 py-3">
                         <p className="font-medium text-gray-900">{p.assName}</p>
-                        <p className="text-xs text-gray-400 mt-0.5">{p.model}</p>
+                        <p className="text-xs text-gray-400 mt-0.5">
+                          {p.model}
+                        </p>
                       </td>
                       {/* Customer */}
-                      <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{p.customer}</td>
+                      <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
+                        {p.customer}
+                      </td>
                       {/* Project Leader */}
                       <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
                         {p.projectLeader?.name ?? "-"}
@@ -420,12 +493,27 @@ export default function CycleTimePage() {
                       {groupLabels.map((label) => {
                         const g = groups.find((x) => x.group === label);
                         const val = g?.value;
-                        const isOver = target !== null && target !== undefined && val !== null && val !== undefined && val > target;
-                        const isUnder = target !== null && target !== undefined && val !== null && val !== undefined && val <= target;
+                        const isOver =
+                          target !== null &&
+                          target !== undefined &&
+                          val !== null &&
+                          val !== undefined &&
+                          val > target;
+                        const isUnder =
+                          target !== null &&
+                          target !== undefined &&
+                          val !== null &&
+                          val !== undefined &&
+                          val <= target;
                         return (
-                          <td key={label} className="px-4 py-3 text-center whitespace-nowrap">
+                          <td
+                            key={label}
+                            className="px-4 py-3 text-center whitespace-nowrap"
+                          >
                             {val !== null && val !== undefined ? (
-                              <span className={`inline-flex items-center justify-center px-3 py-1 rounded-full font-semibold text-sm ${isOver ? "bg-red-100 text-red-700" : isUnder ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"}`}>
+                              <span
+                                className={`inline-flex items-center justify-center px-3 py-1 rounded-full font-semibold text-sm ${isOver ? "bg-green-100 text-green-700" : isUnder ? " bg-red-100 text-red-700" : "bg-gray-100 text-gray-600"}`}
+                              >
                                 {val}
                               </span>
                             ) : (
@@ -478,7 +566,9 @@ export default function CycleTimePage() {
           onClose={() => setEditProject(null)}
           onSaved={(updated) => {
             queryClient.setQueryData<Project[]>(["projects-ct"], (old) =>
-              old ? old.map((p) => (p.id === updated.id ? updated : p)) : [updated]
+              old
+                ? old.map((p) => (p.id === updated.id ? updated : p))
+                : [updated],
             );
             setEditProject(null);
           }}
