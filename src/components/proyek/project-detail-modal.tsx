@@ -1,7 +1,7 @@
 "use client";
 import { apiFetch } from "@/lib/fetch-client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, memo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { X, Plus, Save, Loader2, Download, Check, Trash2, ChevronDown, ChevronRight, Edit2, ExternalLink, CheckCircle2 } from "lucide-react";
 import * as XLSX from "xlsx";
@@ -49,17 +49,24 @@ export function ProjectDetailModal({ project, onClose, onUpdate }: Props) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<Tab>("info");
+  const [mountedTabs, setMountedTabs] = useState<Set<Tab>>(new Set(["info"]));
+  const changeTab = (t: Tab) => { setTab(t); setMountedTabs((prev) => new Set([...prev, t])); };
 
   // Fetch full project detail
   const { data: detail, refetch } = useQuery<Project>({
     queryKey: ["project", project.id],
     queryFn: () => apiFetch(`/api/projects/${project.id}`).then((r) => r.json()),
     initialData: project,
+    staleTime: 30000,
+    refetchOnWindowFocus: false,
   });
 
   const { data: users = [] } = useQuery<User[]>({
     queryKey: ["users"],
     queryFn: () => apiFetch("/api/users").then((r) => r.json()),
+    staleTime: 120000,
+    gcTime: 300000,
+    refetchOnWindowFocus: false,
   });
 
   const handleExport = async () => {
@@ -139,7 +146,7 @@ export function ProjectDetailModal({ project, onClose, onUpdate }: Props) {
               </span>
             </div>
             <h2 className="text-lg font-bold text-gray-900 mt-1.5 truncate">{detail.assName}</h2>
-            <p className="text-sm text-gray-500">{detail.model} — {detail.customer}</p>
+            <p className="text-sm text-gray-500">{detail.model} - {detail.customer}</p>
           </div>
           <div className="flex items-center gap-2 ml-4 shrink-0">
             <button
@@ -171,7 +178,7 @@ export function ProjectDetailModal({ project, onClose, onUpdate }: Props) {
           {tabs.map((t) => (
             <button
               key={t.id}
-              onClick={() => setTab(t.id)}
+              onClick={() => changeTab(t.id)}
               className={`px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${tab === t.id
                 ? "border-blue-600 text-blue-600"
                 : "border-transparent text-gray-500 hover:text-gray-800"
@@ -182,14 +189,14 @@ export function ProjectDetailModal({ project, onClose, onUpdate }: Props) {
           ))}
         </div>
 
-        {/* Content */}
+        {/* Content - tabs are lazy-mounted: only rendered on first visit, then kept alive with hidden */}
         <div className="flex-1 overflow-y-auto p-6">
-          {tab === "info" && <InfoTab detail={detail} users={users} onUpdate={onUpdate} toast={toast} refetch={refetch} />}
-          {tab === "phases" && <PhasesTab detail={detail} users={users} toast={toast} refetch={refetch} queryClient={queryClient} onUpdate={onUpdate} />}
-          {tab === "hinanhyo" && <HinanhyoTab detail={detail} toast={toast} refetch={refetch} />}
-          {tab === "mp" && <ManpowerTab detail={detail} onUpdate={onUpdate} toast={toast} refetch={refetch} />}
-          {tab === "ct" && <CycleTimeTab detail={detail} onUpdate={onUpdate} toast={toast} refetch={refetch} />}
-          {tab === "activity" && <ActivityTab detail={detail} />}
+          <div className={tab !== "info" ? "hidden" : ""}>{mountedTabs.has("info") && <InfoTab detail={detail} users={users} onUpdate={onUpdate} toast={toast} refetch={refetch} />}</div>
+          <div className={tab !== "phases" ? "hidden" : ""}>{mountedTabs.has("phases") && <PhasesTab detail={detail} users={users} toast={toast} refetch={refetch} queryClient={queryClient} onUpdate={onUpdate} />}</div>
+          <div className={tab !== "hinanhyo" ? "hidden" : ""}>{mountedTabs.has("hinanhyo") && <HinanhyoTab detail={detail} toast={toast} refetch={refetch} />}</div>
+          <div className={tab !== "mp" ? "hidden" : ""}>{mountedTabs.has("mp") && <ManpowerTab detail={detail} onUpdate={onUpdate} toast={toast} refetch={refetch} />}</div>
+          <div className={tab !== "ct" ? "hidden" : ""}>{mountedTabs.has("ct") && <CycleTimeTab detail={detail} onUpdate={onUpdate} toast={toast} refetch={refetch} />}</div>
+          <div className={tab !== "activity" ? "hidden" : ""}>{mountedTabs.has("activity") && <ActivityTab detail={detail} />}</div>
         </div>
       </div>
     </div>
@@ -376,7 +383,7 @@ function InfoTab({ detail, users, onUpdate, toast, refetch }: {
           <select value={form.projectLeaderId} onChange={(e) => setForm({ ...form, projectLeaderId: e.target.value })}
             className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
             {users.map((u) => (
-              <option key={u.id} value={u.id}>{u.name} — {DEPARTMENT_LABELS[u.department!] ?? u.role}</option>
+              <option key={u.id} value={u.id}>{u.name} - {DEPARTMENT_LABELS[u.department!] ?? u.role}</option>
             ))}
           </select>
         </div>
@@ -482,7 +489,6 @@ function FaseSection({ fase, users, projectId, toast, refetch }: {
   toast: (type: "success" | "error", msg: string) => void;
   refetch: () => void;
 }) {
-  console.log("USERS: ", users)
   const [expanded, setExpanded] = useState(fase.fase === "RFQ" || fase.fase === "DIE_GO");
   const [showAddForm, setShowAddForm] = useState(false);
   const [addForm, setAddForm] = useState({ name: "", description: "", picId: "", picStartDate: "", picTargetDate: "", customerStartDate: "", customerTargetDate: "", documentUrl: "" });
@@ -633,7 +639,7 @@ function FaseSection({ fase, users, projectId, toast, refetch }: {
                     className="w-full border border-gray-200 rounded px-2.5 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500">
                     <option value="">Select PIC...</option>
                     {users.map((u) => (
-                      <option key={u.id} value={u.id}>{u.name} — {DEPARTMENT_LABELS[u.department!] ?? u.role}</option>
+                      <option key={u.id} value={u.id}>{u.name} - {DEPARTMENT_LABELS[u.department!] ?? u.role}</option>
                     ))}
                   </select>
                 </div>
@@ -715,13 +721,33 @@ function FaseSection({ fase, users, projectId, toast, refetch }: {
   );
 }
 
-function SubFaseRow({ subFase, users, toast, refetch }: {
+function patchProjectCache(
+  queryClient: ReturnType<typeof useQueryClient>,
+  projectId: string,
+  updater: (sf: SubFase) => SubFase | null
+) {
+  queryClient.setQueryData<Project>(["project", projectId], (old) => {
+    if (!old) return old;
+    return {
+      ...old,
+      fases: old.fases?.map((f) => ({
+        ...f,
+        subFases: (f.subFases ?? [])
+          .map((sf) => updater(sf))
+          .filter(Boolean) as SubFase[],
+      })),
+    };
+  });
+}
+
+const SubFaseRow = memo(function SubFaseRow({ subFase, users, toast, refetch }: {
   subFase: SubFase;
   users: User[];
   toast: (type: "success" | "error", msg: string) => void;
   refetch: () => void;
 }) {
-  const [toggling, setToggling] = useState(false);
+  const queryClient = useQueryClient();
+  const [localIsDone, setLocalIsDone] = useState(subFase.isDone);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editForm, setEditForm] = useState({
@@ -735,16 +761,31 @@ function SubFaseRow({ subFase, users, toast, refetch }: {
     description: subFase.description ?? "",
   });
 
+  // Keep in sync if parent refetches
+  useState(() => { setLocalIsDone(subFase.isDone); });
+
   const toggle = async () => {
-    setToggling(true);
+    const newValue = !localIsDone;
+    // Optimistic: update UI immediately
+    setLocalIsDone(newValue);
+    patchProjectCache(queryClient, subFase.projectId, (sf) =>
+      sf.id === subFase.id ? { ...sf, isDone: newValue } : sf
+    );
     const res = await apiFetch(`/api/subfases/${subFase.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ isDone: !subFase.isDone }),
+      body: JSON.stringify({ isDone: newValue }),
     });
-    setToggling(false);
-    if (!res.ok) { toast("error", "Failed to update SubPhase"); return; }
-    refetch();
+    if (!res.ok) {
+      // Revert on error
+      setLocalIsDone(!newValue);
+      patchProjectCache(queryClient, subFase.projectId, (sf) =>
+        sf.id === subFase.id ? { ...sf, isDone: !newValue } : sf
+      );
+      toast("error", "Failed to update SubPhase");
+      return;
+    }
+    refetch(); // Background sync (progress bars etc)
   };
 
   const saveEdit = async () => {
@@ -763,19 +804,30 @@ function SubFaseRow({ subFase, users, toast, refetch }: {
         description: editForm.description || null,
       }),
     });
+    const data = await res.json();
     setSaving(false);
     if (!res.ok) { toast("error", "Failed to update SubPhase"); return; }
+    // Update cache with server response — no refetch needed
+    patchProjectCache(queryClient, subFase.projectId, (sf) =>
+      sf.id === subFase.id ? { ...sf, ...data } : sf
+    );
     toast("success", "SubPhase updated");
     setEditing(false);
-    refetch();
   };
 
   const del = async () => {
     if (!confirm(`Delete SubPhase "${subFase.name}"?`)) return;
+    // Optimistic: remove from cache immediately
+    patchProjectCache(queryClient, subFase.projectId, (sf) =>
+      sf.id === subFase.id ? null : sf
+    );
     const res = await apiFetch(`/api/subfases/${subFase.id}`, { method: "DELETE" });
-    if (!res.ok) { toast("error", "Failed to delete SubPhase"); return; }
+    if (!res.ok) {
+      toast("error", "Failed to delete SubPhase");
+      refetch(); // Restore on error
+      return;
+    }
     toast("success", "SubPhase deleted");
-    refetch();
   };
 
   const now = new Date();
@@ -783,7 +835,7 @@ function SubFaseRow({ subFase, users, toast, refetch }: {
   const diffPic = picTarget ? Math.ceil((picTarget.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)) : null;
 
   let statusDot = "bg-blue-400";
-  if (subFase.isDone) statusDot = "bg-green-500";
+  if (localIsDone) statusDot = "bg-green-500";
   else if (diffPic !== null && diffPic < 0) statusDot = "bg-red-500";
   else if (diffPic !== null && diffPic <= 3) statusDot = "bg-yellow-400";
 
@@ -801,7 +853,7 @@ function SubFaseRow({ subFase, users, toast, refetch }: {
             <select value={editForm.picId} onChange={(e) => setEditForm({ ...editForm, picId: e.target.value })}
               className="w-full border border-gray-200 rounded px-2.5 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500">
               {users.map((u) => (
-                <option key={u.id} value={u.id}>{u.name} — {DEPARTMENT_LABELS[u.department!] ?? u.role}</option>
+                <option key={u.id} value={u.id}>{u.name} - {DEPARTMENT_LABELS[u.department!] ?? u.role}</option>
               ))}
             </select>
           </div>
@@ -851,19 +903,18 @@ function SubFaseRow({ subFase, users, toast, refetch }: {
   }
 
   return (
-    <div className={`flex items-start gap-3 bg-white rounded-lg border px-3 py-2.5 ${subFase.isDone ? "border-green-200 opacity-75" : "border-gray-200"}`}>
+    <div className={`flex items-start gap-3 bg-white rounded-lg border px-3 py-2.5 ${localIsDone ? "border-green-200 opacity-75" : "border-gray-200"}`}>
       <button
         onClick={toggle}
-        disabled={toggling}
-        className={`mt-0.5 w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 transition-colors ${subFase.isDone ? "bg-green-500 border-green-500" : "border-gray-300 hover:border-blue-400"
+        className={`mt-0.5 w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 transition-colors ${localIsDone ? "bg-green-500 border-green-500" : "border-gray-300 hover:border-blue-400"
           }`}
       >
-        {toggling ? <Loader2 className="w-3 h-3 animate-spin text-white" /> : subFase.isDone && <Check className="w-3 h-3 text-white" />}
+        {localIsDone && <Check className="w-3 h-3 text-white" />}
       </button>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <span className={`w-2 h-2 rounded-full shrink-0 ${statusDot}`} />
-          <p className={`text-sm font-medium ${subFase.isDone ? "line-through text-gray-400" : "text-gray-900"}`}>{subFase.name}</p>
+          <p className={`text-sm font-medium ${localIsDone ? "line-through text-gray-400" : "text-gray-900"}`}>{subFase.name}</p>
           {subFase.documentUrl && (
             <a href={subFase.documentUrl} target="_blank" rel="noopener noreferrer"
               className="text-blue-500 hover:text-blue-700" title="Open document">
@@ -887,7 +938,7 @@ function SubFaseRow({ subFase, users, toast, refetch }: {
       </div>
     </div>
   );
-}
+});
 
 // ─── Hinanhyo Tab ─────────────────────────────────────────────────────────────
 
@@ -987,7 +1038,7 @@ function HinanhyoTab({ detail, toast, refetch }: {
                 className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
                 <option value="">General (no specific SubPhase)</option>
                 {allSubFases.map((sf) => (
-                  <option key={sf.id} value={sf.id}>{sf.faseName} — {sf.name}</option>
+                  <option key={sf.id} value={sf.id}>{sf.faseName} - {sf.name}</option>
                 ))}
               </select>
             </div>
@@ -996,6 +1047,13 @@ function HinanhyoTab({ detail, toast, refetch }: {
               <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })}
                 placeholder="Issue title..."
                 className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">Status</label>
+              <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                {Object.entries(HINANHYO_STATUS_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+              </select>
             </div>
             <div className="col-span-2">
               <label className="block text-xs font-semibold text-gray-600 mb-1">Description</label>
@@ -1100,7 +1158,7 @@ function HinanhyoRow({ item, allSubFases, onDelete, onRefetch, toast }: {
               className="w-full border border-gray-200 rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500">
               <option value="">General</option>
               {allSubFases.map((sf) => (
-                <option key={sf.id} value={sf.id}>{sf.faseName} — {sf.name}</option>
+                <option key={sf.id} value={sf.id}>{sf.faseName} - {sf.name}</option>
               ))}
             </select>
           </div>
@@ -1164,15 +1222,17 @@ function ManpowerTab({ detail, onUpdate, toast, refetch }: {
   toast: (type: "success" | "error", msg: string) => void;
   refetch: () => void;
 }) {
+  const [kebutuhanMp, setKebutuhanMp] = useState(String(detail.kebutuhanMp ?? ""));
   const [aktualMp, setAktualMp] = useState(String(detail.aktualMp ?? ""));
   const [saving, setSaving] = useState(false);
 
   const save = async () => {
+    if (!kebutuhanMp || parseInt(kebutuhanMp) < 1) { toast("error", "Required MP must be at least 1"); return; }
     setSaving(true);
     const res = await apiFetch(`/api/projects/${detail.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ aktualMp: aktualMp || null }),
+      body: JSON.stringify({ kebutuhanMp, aktualMp: aktualMp || null }),
     });
     const data = await res.json();
     setSaving(false);
@@ -1188,7 +1248,17 @@ function ManpowerTab({ detail, onUpdate, toast, refetch }: {
       <div className="grid grid-cols-2 gap-4">
         <div className="bg-gray-50 rounded-lg p-4">
           <p className="text-xs font-medium text-gray-500 mb-1">Required MP</p>
-          <p className="text-2xl font-bold text-gray-900">{detail.kebutuhanMp} <span className="text-sm font-normal text-gray-500">persons</span></p>
+          <div className="flex items-center gap-2">
+            <input
+              type="number"
+              min="1"
+              value={kebutuhanMp}
+              onChange={(e) => setKebutuhanMp(e.target.value)}
+              placeholder="-"
+              className="w-24 border border-gray-200 rounded-lg px-3 py-1.5 text-sm font-bold text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <span className="text-xs text-gray-400">persons</span>
+          </div>
         </div>
         <div className="bg-gray-50 rounded-lg p-4">
           <p className="text-xs font-medium text-gray-500 mb-1">Actual MP</p>
@@ -1201,14 +1271,15 @@ function ManpowerTab({ detail, onUpdate, toast, refetch }: {
               placeholder="-"
               className="w-24 border border-gray-200 rounded-lg px-3 py-1.5 text-sm font-bold text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
-            <button onClick={save} disabled={saving}
-              className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-medium disabled:opacity-50">
-              {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
-              Save
-            </button>
+            <span className="text-xs text-gray-400">persons</span>
           </div>
         </div>
       </div>
+      <button onClick={save} disabled={saving}
+        className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-medium disabled:opacity-50">
+        {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+        Save
+      </button>
       {detail.aktualMp && detail.aktualMp > detail.kebutuhanMp && (
         <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 text-sm text-orange-700">
           ⚠ Actual MP exceeds required by {detail.aktualMp - detail.kebutuhanMp} person(s) ({Math.round(((detail.aktualMp - detail.kebutuhanMp) / detail.kebutuhanMp) * 100)}% over)
@@ -1300,10 +1371,10 @@ function CycleTimeTab({ detail, onUpdate, toast, refetch }: {
               step="any"
               value={targetCt}
               onChange={(e) => setTargetCt(e.target.value)}
-              placeholder="—"
+              placeholder="-"
               className="w-36 border border-gray-200 rounded-lg px-3 py-2 text-lg font-bold text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 pr-14"
             />
-            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 font-medium">unit</span>
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 font-medium">CT</span>
           </div>
           <button
             onClick={saveTarget}
@@ -1363,19 +1434,18 @@ function CycleTimeTab({ detail, onUpdate, toast, refetch }: {
                       step="any"
                       value={g.value !== null && g.value !== undefined ? String(g.value) : ""}
                       onChange={(e) => updateGroupValue(i, e.target.value)}
-                      placeholder="—"
+                      placeholder="-"
                       className="w-full border border-gray-200 rounded px-3 py-1.5 text-sm font-semibold text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 pr-12"
                     />
-                    <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-gray-400">unit</span>
+                    <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-gray-400">CT</span>
                   </div>
-                  {/* {detail.targetCt !== null && detail.targetCt !== undefined && g.value !== null && g.value !== undefined && (
-                    <p className={`text-xs mt-1.5 font-medium ${g.value <= detail.targetCt ? "text-green-600" : "text-red-500"
-                      }`}>
-                      {g.value <= detail.targetCt
-                        ? `✓ ${(detail.targetCt - g.value).toFixed(2)}s di bawah target`
-                        : `⚠ ${(g.value - detail.targetCt).toFixed(2)}s melebihi target`}
+                  {detail.targetCt !== null && detail.targetCt !== undefined && g.value !== null && g.value !== undefined && (
+                    <p className={`text-xs mt-1.5 font-medium ${g.value >= detail.targetCt ? "text-green-600" : "text-red-500"}`}>
+                      {g.value >= detail.targetCt
+                        ? `✓ +${(g.value - detail.targetCt).toFixed(2)} above target`
+                        : `⚠ -${(detail.targetCt - g.value).toFixed(2)} below target`}
                     </p>
-                  )} */}
+                  )}
                 </div>
               ))}
             </div>
@@ -1388,19 +1458,19 @@ function CycleTimeTab({ detail, onUpdate, toast, refetch }: {
                 {savingGroups ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
                 Save All Groups
               </button>
-              {/* {detail.targetCt !== null && detail.targetCt !== undefined && groups.some(g => g.value !== null) && (() => {
+              {detail.targetCt !== null && detail.targetCt !== undefined && groups.some(g => g.value !== null) && (() => {
                 const filled = groups.filter(g => g.value !== null);
                 const avg = filled.reduce((sum, g) => sum + (g.value ?? 0), 0) / filled.length;
                 return (
                   <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${
-                    avg <= detail.targetCt
+                    avg >= detail.targetCt
                       ? "bg-green-100 text-green-700"
                       : "bg-red-100 text-red-700"
                   }`}>
-                    Avg: {avg.toFixed(2)}s {avg <= detail.targetCt ? "✓" : "⚠"}
+                    Avg: {avg.toFixed(2)} {avg >= detail.targetCt ? "✓ reaches target" : "⚠ below target"}
                   </span>
                 );
-              })()} */}
+              })()}
             </div>
           </>
         )}

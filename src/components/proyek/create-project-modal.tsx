@@ -162,7 +162,7 @@ export function CreateProjectModal({ onClose, onCreate }: Props) {
                   )
                   .map((u) => (
                     <option key={u.id} value={u.id}>
-                      {u.name} — {DEPARTMENT_LABELS[u.department!] ?? u.role}
+                      {u.name} - {DEPARTMENT_LABELS[u.department!] ?? u.role}
                     </option>
                   ))}
               </select>

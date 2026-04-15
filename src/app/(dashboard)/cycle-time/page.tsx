@@ -125,7 +125,7 @@ function EditCtModal({
                 step="any"
                 value={targetCt}
                 onChange={(e) => setTargetCt(e.target.value)}
-                placeholder="—"
+                placeholder="-"
                 className="w-full border border-gray-200 rounded-lg px-3 py-2 text-base font-bold text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 pr-14"
               />
               <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 font-medium">
@@ -192,7 +192,7 @@ function EditCtModal({
                               : ""
                           }
                           onChange={(e) => updateValue(i, e.target.value)}
-                          placeholder="—"
+                          placeholder="-"
                           className="w-full border border-gray-200 rounded px-2 py-1 text-sm font-semibold bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 pr-9"
                         />
                         {/* <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-400">s</span> */}
@@ -486,7 +486,7 @@ export default function CycleTimePage() {
                             {target}
                           </span>
                         ) : (
-                          <span className="text-gray-300 text-base">—</span>
+                          <span className="text-gray-300 text-base">-</span>
                         )}
                       </td>
                       {/* Group columns */}
@@ -517,7 +517,7 @@ export default function CycleTimePage() {
                                 {val}
                               </span>
                             ) : (
-                              <span className="text-gray-300 text-base">—</span>
+                              <span className="text-gray-300 text-base">-</span>
                             )}
                           </td>
                         );
@@ -553,7 +553,7 @@ export default function CycleTimePage() {
             </span>
             <span className="text-xs font-semibold text-gray-500 flex items-center gap-1.5">
               <span className="w-2.5 h-2.5 rounded-full bg-gray-300 inline-block" />
-              — = No data
+              - = No data
             </span>
           </div>
         )}

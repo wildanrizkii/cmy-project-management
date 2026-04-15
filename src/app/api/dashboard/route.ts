@@ -52,11 +52,9 @@ export async function GET(req: NextRequest) {
   if (filterCustomer) chartProjects = chartProjects.filter((p) => p.customer === filterCustomer);
   if (filterProjectId) chartProjects = chartProjects.filter((p) => p.id === filterProjectId);
 
-  // ─── KPI ────────────────────────────────────────────────────────────────────
+  // ─── KPI (computed in-memory, no extra DB calls) ────────────────────────────
   const totalAktif = allProjects.filter((p) => p.status === "DALAM_PROSES").length;
   const totalTerlambat = allProjects.filter((p) => p.status === "TERLAMBAT").length;
-
-  const totalHinanhyoPending = await db.hinanhyoDR.count({ where: { status: "PENDING" } });
 
   const activeProjects = allProjects.filter((p) => p.status === "DALAM_PROSES");
   const rataRataProgress =
@@ -76,14 +74,23 @@ export async function GET(req: NextRequest) {
     return end >= now && end <= in7Days && p.status !== "SELESAI";
   }).length;
 
-  // ─── SubFase Alerts ─────────────────────────────────────────────────────────
-  const allSubFases = await db.subFase.findMany({
-    where: { isDone: false },
-    include: {
-      pic: { select: { id: true, name: true } },
-      projectFase: { select: { fase: true } },
-    },
-  });
+  // ─── Parallel DB queries ─────────────────────────────────────────────────────
+  const chartProjectIds = chartProjects.map((p) => p.id);
+  const [totalHinanhyoPending, allSubFases, allHinanhyo, oldPending] = await Promise.all([
+    db.hinanhyoDR.count({ where: { status: "PENDING" } }),
+    db.subFase.findMany({
+      where: { isDone: false },
+      include: {
+        pic: { select: { id: true, name: true } },
+        projectFase: { select: { fase: true } },
+      },
+    }),
+    db.hinanhyoDR.findMany({
+      where: { projectId: { in: chartProjectIds } },
+      select: { status: true, projectId: true },
+    }),
+    db.hinanhyoDR.count({ where: { status: "PENDING", createdAt: { lt: twoWeeksAgo } } }),
+  ]);
 
   const subFaseAlerts = allSubFases
     .filter((sf) => sf.picTargetDate)
@@ -159,9 +166,6 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  const oldPending = await db.hinanhyoDR.count({
-    where: { status: "PENDING", createdAt: { lt: twoWeeksAgo } },
-  });
   if (oldPending > 0) {
     alerts.push({ level: "PERINGATAN", message: `${oldPending} Hinanhyo/DR items pending for more than 14 days` });
   }
@@ -191,10 +195,6 @@ export async function GET(req: NextRequest) {
     };
   });
 
-  const allHinanhyo = await db.hinanhyoDR.findMany({
-    where: { projectId: { in: chartProjects.map((p) => p.id) } },
-    select: { status: true, projectId: true },
-  });
 
   const hinanhyoByProject = chartProjects
     .map((p) => {
@@ -217,13 +217,20 @@ export async function GET(req: NextRequest) {
     aktual: p.aktualMp ?? 0,
   }));
 
-  const ctProjects = chartProjects.map((p) => ({
-    id: p.id,
-    assNumber: p.assNumber,
-    assName: p.assName,
-    targetCt: (p as unknown as { targetCt: number | null }).targetCt ?? null,
-    aktualCt: (p as unknown as { aktualCt: unknown }).aktualCt ?? null,
-  }));
+  const ctProjects = chartProjects
+    .map((p) => ({
+      id: p.id,
+      assNumber: p.assNumber,
+      assName: p.assName,
+      targetCt: (p as unknown as { targetCt: number | null }).targetCt ?? null,
+      aktualCt: (p as unknown as { aktualCt: unknown }).aktualCt ?? null,
+    }))
+    .sort((a, b) => {
+      const aHasData = Array.isArray(a.aktualCt) && (a.aktualCt as { value: number | null }[]).some((g) => g.value !== null);
+      const bHasData = Array.isArray(b.aktualCt) && (b.aktualCt as { value: number | null }[]).some((g) => g.value !== null);
+      if (aHasData === bHasData) return 0;
+      return aHasData ? -1 : 1;
+    });
 
   // ─── Filter options ──────────────────────────────────────────────────────────
   const filterOptions = {

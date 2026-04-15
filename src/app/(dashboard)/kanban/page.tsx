@@ -5,6 +5,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea/dnd";
 import { AlertCircle, Clock, Users, LayoutGrid } from "lucide-react";
+import { KanbanLoader } from "@/components/layout/page-loader";
 import {
   getPriorityColor, getFaseColor, formatDate, getDaysRemaining, computeProjectProgress, computeFaseProgress,
 } from "@/lib/utils";
@@ -101,7 +102,7 @@ export default function KanbanPage() {
         const prevFaseData = project.fases?.find((f) => f.fase === prevFase);
         const prevProgress = prevFaseData ? computeFaseProgress(prevFaseData.subFases ?? []) : 0;
         if (prevProgress < 100) {
-          toast("error", `Phase ${FASE_LABELS[prevFase]} is not 100% complete — cannot move to ${FASE_LABELS[targetId as FaseType]}`);
+          toast("error", `Phase ${FASE_LABELS[prevFase]} is not 100% complete - cannot move to ${FASE_LABELS[targetId as FaseType]}`);
           return;
         }
       }
@@ -113,13 +114,7 @@ export default function KanbanPage() {
     new Map(projects.map((p) => [p.projectLeaderId, p.projectLeader])).values()
   ).filter(Boolean);
 
-  if (isLoading) {
-    return (
-      <div className="p-8 flex items-center justify-center min-h-screen">
-        <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
-  }
+  if (isLoading) return <KanbanLoader />;
 
   return (
     <div className="flex flex-col h-screen overflow-hidden">

@@ -2,6 +2,7 @@
 import { apiFetch } from "@/lib/fetch-client";
 
 import { useQuery } from "@tanstack/react-query";
+import { DashboardLoader } from "@/components/layout/page-loader";
 import { useState, useEffect } from "react";
 import {
   AlertTriangle,
@@ -58,7 +59,7 @@ function ProjectListTooltip(props: AnyTooltipProps & { labelKey: string; countKe
   return (
     <div className="bg-white border border-gray-200 shadow-xl rounded-xl p-3 text-xs max-w-56">
       <p className="font-semibold text-gray-900 mb-1.5">
-        {label} — <span className="text-blue-600">{count} project(s)</span>
+        {label} - <span className="text-blue-600">{count} project(s)</span>
       </p>
       <div className="space-y-0.5 max-h-36 overflow-y-auto">
         {projects.length > 0 ? (
@@ -85,7 +86,7 @@ function HinanhyoTooltip(props: AnyTooltipProps) {
   return (
     <div className="bg-white border border-gray-200 shadow-xl rounded-xl p-3 text-xs max-w-52">
       <p className="font-semibold text-gray-900 mb-1.5 truncate">
-        <span className="font-mono">{d.code}</span> — {d.name}
+        <span className="font-mono">{d.code}</span> - {d.name}
       </p>
       <div className="space-y-1">
         <p className="flex items-center justify-between gap-4">
@@ -119,7 +120,7 @@ function StatusPieTooltip(props: AnyTooltipProps) {
   return (
     <div className="bg-white border border-gray-200 shadow-xl rounded-xl p-3 text-xs max-w-56">
       <p className="font-semibold text-gray-900 mb-1.5">
-        {d.name} — <span className="text-blue-600">{d.value} project(s)</span>
+        {d.name} - <span className="text-blue-600">{d.value} project(s)</span>
       </p>
       <div className="space-y-0.5 max-h-36 overflow-y-auto">
         {d.projects?.map((p) => (
@@ -172,7 +173,7 @@ function PieCountLabel({
   );
 }
 
-// ─── Clock — isolated so it doesn't trigger chart re-renders ─────────────────
+// ─── Clock - isolated so it doesn't trigger chart re-renders ─────────────────
 function ClockDisplay() {
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
@@ -214,18 +215,11 @@ export default function DashboardPage() {
       return apiFetch(`/api/dashboard?${params}`).then((r) => r.json());
     },
     refetchInterval: 30000,
+    staleTime: 25000,
+    refetchOnWindowFocus: false,
   });
 
-  if (isLoading) {
-    return (
-      <div className="p-8 flex items-center justify-center min-h-screen">
-        <div className="text-center space-y-3">
-          <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto" />
-          <p className="text-gray-500 text-sm">Loading dashboard...</p>
-        </div>
-      </div>
-    );
-  }
+  if (isLoading) return <DashboardLoader />;
 
   const kpi = data?.kpi ?? {};
   const charts = data?.charts ?? {};
@@ -287,7 +281,7 @@ export default function DashboardPage() {
           >
             <option value="">All Projects</option>
             {filterOptions.projects.map((p: { id: string; code: string; name: string }) => (
-              <option key={p.id} value={p.id}>{p.code} — {p.name}</option>
+              <option key={p.id} value={p.id}>{p.code} - {p.name}</option>
             ))}
           </select>
           <select
@@ -321,7 +315,7 @@ export default function DashboardPage() {
           )}
           {hasFilter && (
             <span className="text-xs text-blue-600 font-medium bg-blue-50 px-2 py-1 rounded-full">
-              Filter active — {taskMonitoring.length} project(s)
+              Filter active - {taskMonitoring.length} project(s)
             </span>
           )}
         </div>
@@ -343,7 +337,7 @@ export default function DashboardPage() {
       {/* Charts Row 1: Status + Fase + Hinanhyo */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
 
-        {/* Chart 1: Distribusi Status — Pie with count labels always visible */}
+        {/* Chart 1: Distribusi Status - Pie with count labels always visible */}
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
           <h2 className="text-sm font-semibold text-gray-900 mb-1 flex items-center gap-2">
             <BarChart3 className="w-4 h-4 text-blue-600" />
@@ -386,7 +380,7 @@ export default function DashboardPage() {
           )}
         </div>
 
-        {/* Chart 2: Count Proyek per Fase — vertical bar */}
+        {/* Chart 2: Count Proyek per Fase - vertical bar */}
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
           <h2 className="text-sm font-semibold text-gray-900 mb-1 flex items-center gap-2">
             <TrendingUp className="w-4 h-4 text-blue-600" />
@@ -419,7 +413,7 @@ export default function DashboardPage() {
           </ResponsiveContainer>
         </div>
 
-        {/* Chart 3: Hinanhyo & DR — vertical stacked bar per project */}
+        {/* Chart 3: Hinanhyo & DR - vertical stacked bar per project */}
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
           <h2 className="text-sm font-semibold text-gray-900 mb-1 flex items-center gap-2">
             <AlertCircle className="w-4 h-4 text-orange-500" />
