@@ -45,7 +45,7 @@ export async function GET(req: NextRequest) {
   await db.project.updateMany({
     where: {
       targetDate: { lt: new Date() },
-      status: { notIn: ["SELESAI", "TERLAMBAT", "TUNDA"] },
+      status: { notIn: ["SELESAI", "TERLAMBAT", "TUNDA", "DALAM_PROSES"] },
     },
     data: { status: "TERLAMBAT" },
   });
