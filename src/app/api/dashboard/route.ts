@@ -18,6 +18,15 @@ export async function GET(req: NextRequest) {
   const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
   const twoWeeksAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
 
+  // Auto-sync overdue statuses before fetching
+  await db.project.updateMany({
+    where: {
+      targetDate: { lt: now },
+      status: { notIn: ["SELESAI", "TERLAMBAT", "TUNDA"] },
+    },
+    data: { status: "TERLAMBAT" },
+  });
+
   // All projects unfiltered
   const allProjects = await db.project.findMany({
     include: {
@@ -257,11 +266,37 @@ export async function GET(req: NextRequest) {
     };
   });
 
+  // Schedule Customer - latest revisions for each chart project
+  const scheduleRevisions = await db.customerScheduleRevision.findMany({
+    where: { projectId: { in: chartProjectIds } },
+    orderBy: { revisionDate: "asc" },
+  });
+
+  // Group by project, include assNumber
+  const scheduleByProject = chartProjects.map((p) => ({
+    projectId: p.id,
+    assNumber: p.assNumber,
+    assName: p.assName,
+    revisions: scheduleRevisions
+      .filter((r) => r.projectId === p.id)
+      .map((r) => ({
+        id: r.id,
+        revisionDate: r.revisionDate,
+        rfqDate: r.rfqDate,
+        dieGoDate: r.dieGoDate,
+        pp1Date: r.pp1Date,
+        pp2Date: r.pp2Date,
+        pp3Date: r.pp3Date,
+        mpDate: r.mpDate,
+        notes: r.notes,
+      })),
+  })).filter((p) => p.revisions.length > 0);
+
   return Response.json({
     kpi: { totalAktif, totalTerlambat, totalHinanhyoPending, rataRataProgress, selesaiBulanIni, deadline7Hari },
     alerts,
     subFaseAlerts: { red: redAlerts, orange: orangeAlerts, yellow: yellowAlerts },
-    charts: { statusDist, phaseDist, hinanhyoByProject, mpChart, ctProjects },
+    charts: { statusDist, phaseDist, hinanhyoByProject, mpChart, ctProjects, scheduleByProject },
     taskMonitoring,
     filterOptions,
   });

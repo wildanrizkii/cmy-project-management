@@ -8,6 +8,7 @@ const inter = Inter({ subsets: ["latin"] });
 export const metadata: Metadata = {
   title: "CMW - Project Management System",
   description: "Sistem manajemen proyek perusahaan",
+  icons: { icon: "/logo-cmw.png", apple: "/logo-cmw.png" },
 };
 
 export default function RootLayout({

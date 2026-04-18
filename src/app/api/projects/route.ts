@@ -41,11 +41,11 @@ export async function GET(req: NextRequest) {
     ];
   }
 
-  // Auto update TERLAMBAT
+  // Auto update TERLAMBAT - includes DALAM_PROSES and BELUM_MULAI that are past target
   await db.project.updateMany({
     where: {
       targetDate: { lt: new Date() },
-      status: { notIn: ["SELESAI", "TERLAMBAT", "TUNDA", "DALAM_PROSES"] },
+      status: { notIn: ["SELESAI", "TERLAMBAT", "TUNDA"] },
     },
     data: { status: "TERLAMBAT" },
   });

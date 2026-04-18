@@ -6,9 +6,12 @@ import { useSession } from "next-auth/react";
 import { Loader2, User, Lock, CheckCircle } from "lucide-react";
 import { DEPARTMENT_LABELS } from "@/types";
 import type { Department } from "@/types";
+import { useLanguage } from "@/contexts/language-context";
 
 export default function ProfilePage() {
   const { data: session, update } = useSession();
+  const { t } = useLanguage();
+  const pr = t.profile;
 
   const [name, setName] = useState(session?.user?.name ?? "");
   const [currentPassword, setCurrentPassword] = useState("");
@@ -24,7 +27,7 @@ export default function ProfilePage() {
     setSuccess("");
 
     if (newPassword && newPassword !== confirmPassword) {
-      setError("New password confirmation does not match");
+      setError(pr.passwordMismatch);
       return;
     }
 
@@ -39,12 +42,12 @@ export default function ProfilePage() {
     setSaving(false);
 
     if (!res.ok) {
-      setError(data.error ?? "An error occurred");
+      setError(data.error ?? pr.updateFailed);
       return;
     }
 
     await update({ name: data.name });
-    setSuccess("Profile updated successfully");
+    setSuccess(pr.updateSuccess);
     setCurrentPassword("");
     setNewPassword("");
     setConfirmPassword("");
@@ -56,7 +59,7 @@ export default function ProfilePage() {
     <div className="p-6 max-w-2xl space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">My Profile</h1>
-        <p className="text-sm text-gray-500 mt-0.5">Manage your account information and security</p>
+        <p className="text-sm text-gray-500 mt-0.5">{pr.subtitle}</p>
       </div>
 
       {/* Avatar & info card */}
@@ -73,7 +76,7 @@ export default function ProfilePage() {
             <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${
               user?.role === "ATASAN" ? "bg-purple-100 text-purple-700" : "bg-green-100 text-green-700"
             }`}>
-              {user?.role === "ATASAN" ? "Manager" : "PIC"}
+              {user?.role === "ATASAN" ? pr.roleManager : pr.rolePic}
             </span>
             {user?.department && (
               <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
@@ -88,7 +91,7 @@ export default function ProfilePage() {
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm">
         <div className="px-6 py-4 border-b border-gray-100 flex items-center gap-2">
           <User className="w-4 h-4 text-gray-400" />
-          <h2 className="font-semibold text-gray-900">Edit Profile</h2>
+          <h2 className="font-semibold text-gray-900">{pr.editTitle}</h2>
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-5">
@@ -103,7 +106,7 @@ export default function ProfilePage() {
           )}
 
           <div>
-            <label className="block text-xs font-semibold text-gray-600 mb-1">Full Name</label>
+            <label className="block text-xs font-semibold text-gray-600 mb-1">{pr.fullName}</label>
             <input
               required
               value={name}
@@ -113,52 +116,52 @@ export default function ProfilePage() {
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-gray-600 mb-1">Email</label>
+            <label className="block text-xs font-semibold text-gray-600 mb-1">{pr.email}</label>
             <input
               value={user?.email ?? ""}
               disabled
               className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm bg-gray-50 text-gray-400"
             />
-            <p className="text-xs text-gray-400 mt-1">Email cannot be changed</p>
+            <p className="text-xs text-gray-400 mt-1">{pr.emailNote}</p>
           </div>
 
           {/* Password section */}
           <div className="pt-2 border-t border-gray-100">
             <div className="flex items-center gap-2 mb-4">
               <Lock className="w-4 h-4 text-gray-400" />
-              <p className="text-sm font-semibold text-gray-700">Change Password</p>
-              <span className="text-xs text-gray-400">(optional)</span>
+              <p className="text-sm font-semibold text-gray-700">{pr.changePassword}</p>
+              <span className="text-xs text-gray-400">{pr.optional}</span>
             </div>
 
             <div className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">Current Password</label>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">{pr.currentPassword}</label>
                 <input
                   type="password"
                   value={currentPassword}
                   onChange={(e) => setCurrentPassword(e.target.value)}
-                  placeholder="Enter current password"
+                  placeholder={pr.currentPasswordPh}
                   className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">New Password</label>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">{pr.newPassword}</label>
                 <input
                   type="password"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
-                  placeholder="Minimum 8 characters"
+                  placeholder={pr.newPasswordPh}
                   minLength={newPassword ? 8 : undefined}
                   className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">Confirm New Password</label>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">{pr.confirmPassword}</label>
                 <input
                   type="password"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="Repeat new password"
+                  placeholder={pr.confirmPasswordPh}
                   className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
@@ -172,7 +175,7 @@ export default function ProfilePage() {
               className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
             >
               {saving && <Loader2 className="w-4 h-4 animate-spin" />}
-              Save Changes
+              {pr.saveChanges}
             </button>
           </div>
         </form>

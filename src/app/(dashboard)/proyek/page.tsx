@@ -15,6 +15,7 @@ import {
 } from "@/types";
 import type { Project, Priority, ProjectStatus, FaseType } from "@/types";
 import { useToast } from "@/components/layout/toast-context";
+import { useLanguage } from "@/contexts/language-context";
 import { ProjectDetailModal } from "@/components/proyek/project-detail-modal";
 import { CreateProjectModal } from "@/components/proyek/create-project-modal";
 
@@ -24,6 +25,8 @@ type SortDir = "asc" | "desc";
 export default function ProyekPage() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { t } = useLanguage();
+  const py = t.proyek;
 
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
@@ -34,17 +37,18 @@ export default function ProyekPage() {
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(10);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
+  const [selectedInitialTab, setSelectedInitialTab] = useState<string | undefined>(undefined);
   const [showCreate, setShowCreate] = useState(false);
 
-  // Auto-open project from global search
+  // Auto-open project from global search or external navigation
   useEffect(() => {
     const openId = sessionStorage.getItem("openProjectId");
     if (!openId) return;
     sessionStorage.removeItem("openProjectId");
-    // We'll find the project once data loads — handled below
+    const openTab = sessionStorage.getItem("openProjectTab");
+    if (openTab) { sessionStorage.removeItem("openProjectTab"); setSelectedInitialTab(openTab); }
     setSearch("");
     setPage(1);
-    // Store id so we can open modal after data loads
     setPendingOpenId(openId);
   }, []);
 
@@ -79,7 +83,7 @@ export default function ProyekPage() {
       queryClient.invalidateQueries({ queryKey: ["projects"] });
       toast("success", `Project ${p.assNumber} deleted`);
     },
-    onError: () => toast("error", "Failed to delete project"),
+    onError: () => toast("error", "Failed to delete"),
   });
 
   const handleSort = (key: SortKey) => {
@@ -125,7 +129,7 @@ export default function ProyekPage() {
   };
 
   const handleDelete = (p: Project) => {
-    if (confirm(`Delete project "${p.assName}"? This action cannot be undone.`)) {
+    if (confirm(`${py.confirmDelete} "${p.assName}"? ${py.confirmDeleteMsg}`)) {
       deleteMutation.mutate(p);
     }
   };
@@ -136,7 +140,7 @@ export default function ProyekPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Projects</h1>
-          <p className="text-sm text-gray-500 mt-0.5">{total} project(s) found</p>
+          <p className="text-sm text-gray-500 mt-0.5">{total} {py.subtitle}</p>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -144,14 +148,14 @@ export default function ProyekPage() {
             className="flex items-center gap-2 px-4 py-2 border border-gray-200 hover:bg-gray-50 text-gray-700 rounded-lg text-sm font-medium transition-colors"
           >
             <Download className="w-4 h-4" />
-            Export Excel
+            {t.export}
           </button>
           <button
             onClick={() => setShowCreate(true)}
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors shadow-sm"
           >
             <Plus className="w-4 h-4" />
-            Add Project
+            {py.addProject}
           </button>
         </div>
       </div>
@@ -164,7 +168,7 @@ export default function ProyekPage() {
             <input
               value={search}
               onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-              placeholder="Search name, customer, assy number..."
+              placeholder={py.searchPlaceholder}
               className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
           </div>
@@ -173,7 +177,7 @@ export default function ProyekPage() {
             onChange={(e) => { setFilterStatus(e.target.value); setPage(1); }}
             className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-700"
           >
-            <option value="">All Status</option>
+            <option value="">{py.allStatus}</option>
             {Object.entries(STATUS_LABELS).map(([k, v]) => (
               <option key={k} value={k}>{v}</option>
             ))}
@@ -183,7 +187,7 @@ export default function ProyekPage() {
             onChange={(e) => { setFilterPriority(e.target.value); setPage(1); }}
             className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-700"
           >
-            <option value="">All Priority</option>
+            <option value="">{py.allPriority}</option>
             {Object.entries(PRIORITY_LABELS).map(([k, v]) => (
               <option key={k} value={k}>{v}</option>
             ))}
@@ -193,7 +197,7 @@ export default function ProyekPage() {
             onChange={(e) => { setFilterFase(e.target.value); setPage(1); }}
             className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-700"
           >
-            <option value="">All Phase</option>
+            <option value="">{py.allPhase}</option>
             {Object.entries(FASE_LABELS).map(([k, v]) => (
               <option key={k} value={k}>{v}</option>
             ))}
@@ -203,7 +207,7 @@ export default function ProyekPage() {
               onClick={() => { setSearch(""); setFilterStatus(""); setFilterPriority(""); setFilterFase(""); setPage(1); }}
               className="px-3 py-2 text-sm text-gray-500 hover:text-gray-800 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
             >
-              Reset
+              {t.reset}
             </button>
           )}
         </div>
@@ -213,100 +217,108 @@ export default function ProyekPage() {
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b border-gray-100">
-              <tr>
+            <thead>
+              <tr className="bg-blue-600 text-white">
                 {[
-                  { key: "assNumber", label: "Assy No." },
-                  { key: "assName", label: "Assy Name" },
-                  { key: "customer", label: "Customer" },
-                  { key: null, label: "Project Leader" },
-                  { key: "priority", label: "Priority" },
-                  { key: "status", label: "Status" },
-                  { key: null, label: "Phase" },
-                  { key: null, label: "Progress" },
-                  { key: "targetDate", label: "Target Date" },
-                  { key: null, label: "Actions" },
+                  { key: "assNumber", label: py.colAssyNo },
+                  { key: "assName", label: py.colAssyName },
+                  { key: "customer", label: py.colCustomer },
+                  { key: null, label: py.colLeader },
+                  { key: "priority", label: py.colPriority },
+                  { key: "status", label: py.colStatus },
+                  { key: null, label: py.colPhase },
+                  { key: null, label: py.colProgress },
+                  { key: "targetDate", label: py.colTargetDate },
+                  { key: null, label: py.colActions },
                 ].map(({ key, label }) => (
                   <th
                     key={label}
-                    className={`px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap ${key ? "cursor-pointer select-none hover:text-gray-700" : ""}`}
+                    className={`px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider whitespace-nowrap ${key ? "cursor-pointer select-none hover:bg-blue-700" : ""}`}
                     onClick={() => key && handleSort(key as SortKey)}
                   >
-                    {label}
-                    {key && <SortIcon k={key as SortKey} />}
+                    <div className="flex items-center gap-1">
+                      {label}
+                      {key && <SortIcon k={key as SortKey} />}
+                    </div>
                   </th>
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-50">
+            <tbody className="divide-y divide-gray-100">
               {isLoading ? (
                 <tr>
-                  <td colSpan={10} className="py-16 text-center text-gray-400">
+                  <td colSpan={10} className="py-20 text-center">
                     <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
-                    Loading...
+                    <p className="text-sm text-gray-400">Loading...</p>
                   </td>
                 </tr>
               ) : paginated.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="py-16 text-center text-gray-400">No projects found</td>
+                  <td colSpan={10} className="py-20 text-center">
+                    <p className="text-sm font-medium text-gray-400">{py.noProjects}</p>
+                  </td>
                 </tr>
               ) : (
                 paginated.map((p) => {
                   const progress = computeProjectProgress(p.fases ?? []);
                   return (
-                    <tr key={p.id} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-4 py-3 font-mono font-medium text-gray-600 text-xs">{p.assNumber}</td>
-                      <td className="px-4 py-3">
+                    <tr key={p.id} className="hover:bg-blue-50/20 transition-colors">
+                      <td className="px-4 py-3.5">
+                        <span className="font-mono text-xs font-semibold bg-gray-100 text-gray-600 px-2 py-0.5 rounded">
+                          {p.assNumber}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3.5">
                         <button
                           onClick={() => setSelectedProject(p)}
-                          className="font-medium text-blue-600 hover:text-blue-800 hover:underline text-left"
+                          className="font-semibold text-gray-900 hover:text-blue-600 text-left leading-snug transition-colors"
                         >
                           {p.assName}
                         </button>
                         <div className="text-xs text-gray-400 mt-0.5">{p.model}</div>
                       </td>
-                      <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{p.customer}</td>
-                      <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{p.projectLeader?.name ?? "-"}</td>
-                      <td className="px-4 py-3">
-                        <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium border ${getPriorityColor(p.priority)}`}>
+                      <td className="px-4 py-3.5 text-sm text-gray-600 whitespace-nowrap">{p.customer}</td>
+                      <td className="px-4 py-3.5 text-sm text-gray-600 whitespace-nowrap">{p.projectLeader?.name ?? "—"}</td>
+                      <td className="px-4 py-3.5">
+                        <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-semibold border ${getPriorityColor(p.priority)}`}>
                           {PRIORITY_LABELS[p.priority]}
                         </span>
                       </td>
-                      <td className="px-4 py-3">
-                        <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium border ${getStatusColor(p.status)}`}>
+                      <td className="px-4 py-3.5">
+                        <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-semibold border ${getStatusColor(p.status)}`}>
                           {STATUS_LABELS[p.status]}
                         </span>
                       </td>
-                      <td className="px-4 py-3">
-                        <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${getFaseColor(p.currentFase)}`}>
+                      <td className="px-4 py-3.5">
+                        <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-semibold ${getFaseColor(p.currentFase)}`}>
                           {FASE_LABELS[p.currentFase]}
                         </span>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3.5 min-w-32">
                         <div className="flex items-center gap-2">
-                          <div className="flex-1 h-1.5 bg-gray-200 rounded-full w-16">
+                          <div className="flex-1 h-2 bg-gray-100 rounded-full">
                             <div
-                              className="h-1.5 bg-blue-500 rounded-full"
+                              className={`h-2 rounded-full transition-all ${progress >= 100 ? "bg-green-500" : progress >= 50 ? "bg-blue-500" : "bg-orange-400"}`}
                               style={{ width: `${progress}%` }}
                             />
                           </div>
-                          <span className="text-xs text-gray-600 font-medium w-8">{progress}%</span>
+                          <span className="text-xs font-semibold text-gray-600 w-9 text-right">{progress}%</span>
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{formatDate(p.targetDate)}</td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-1">
+                      <td className="px-4 py-3.5 text-sm text-gray-600 whitespace-nowrap">{formatDate(p.targetDate)}</td>
+                      <td className="px-4 py-3.5">
+                        <div className="flex items-center gap-0.5">
                           <button
                             onClick={() => setSelectedProject(p)}
-                            className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                            title="View detail"
+                            className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                            title={py.viewDetail}
                           >
                             <Eye className="w-4 h-4" />
                           </button>
                           <button
                             onClick={() => handleDelete(p)}
-                            className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
-                            title="Delete project"
+                            className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                            title={py.deleteTitle}
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
@@ -324,7 +336,7 @@ export default function ProyekPage() {
         {totalPages > 1 && (
           <div className="px-4 py-3 border-t border-gray-100 flex items-center justify-between">
             <div className="flex items-center gap-2 text-sm text-gray-500">
-              <span>Show</span>
+              <span>{py.show}</span>
               <select
                 value={perPage}
                 onChange={(e) => { setPerPage(Number(e.target.value)); setPage(1); }}
@@ -332,7 +344,7 @@ export default function ProyekPage() {
               >
                 {[10, 25, 50].map((n) => <option key={n} value={n}>{n}</option>)}
               </select>
-              <span>of {total} projects</span>
+              <span>{py.ofProjects} {total} {py.projectsSuffix}</span>
             </div>
             <div className="flex items-center gap-1">
               <button
@@ -374,7 +386,8 @@ export default function ProyekPage() {
       {selectedProject && (
         <ProjectDetailModal
           project={selectedProject}
-          onClose={() => setSelectedProject(null)}
+          initialTab={selectedInitialTab as "info" | "phases" | "hinanhyo" | "mp" | "ct" | "schedule" | "activity" | undefined}
+          onClose={() => { setSelectedProject(null); setSelectedInitialTab(undefined); }}
           onUpdate={(updated) => {
             setSelectedProject(updated);
             queryClient.invalidateQueries({ queryKey: ["projects"] });

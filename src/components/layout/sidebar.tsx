@@ -18,19 +18,24 @@ import {
   Calendar,
   Timer,
   X,
+  FileText,
+  ListChecks,
 } from "lucide-react";
 import { DEPARTMENT_LABELS } from "@/types";
 import type { Department } from "@/types";
 import { useSidebar } from "./sidebar-context";
+import { useLanguage } from "@/contexts/language-context";
 import { useState } from "react";
 
-const navItems = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/proyek", label: "Projects", icon: FolderKanban },
-  { href: "/kanban", label: "Kanban Board", icon: Kanban },
-  { href: "/calendar", label: "Calendar of Events", icon: Calendar },
-  { href: "/cycle-time", label: "Cycle Time", icon: Timer },
-  { href: "/users", label: "User Management", icon: Users },
+const NAV_KEYS = [
+  { href: "/dashboard", key: "dashboard" as const, icon: LayoutDashboard },
+  { href: "/proyek", key: "projects" as const, icon: FolderKanban },
+  { href: "/kanban", key: "kanban" as const, icon: Kanban },
+  { href: "/calendar", key: "calendar" as const, icon: Calendar },
+  { href: "/cycle-time", key: "cycleTime" as const, icon: Timer },
+  { href: "/minutes-meeting", key: "minutesMeeting" as const, icon: FileText },
+  { href: "/sub-phases", key: "subPhases" as const, icon: ListChecks },
+  { href: "/users", key: "users" as const, icon: Users },
 ];
 
 export function Sidebar() {
@@ -38,6 +43,7 @@ export function Sidebar() {
   const router = useRouter();
   const { data: session } = useSession();
   const { collapsed, setCollapsed, mobileOpen, setMobileOpen } = useSidebar();
+  const { t } = useLanguage();
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   const NavContent = () => (
@@ -83,7 +89,8 @@ export function Sidebar() {
             Menu
           </p>
         )}
-        {navItems.map(({ href, label, icon: Icon }) => {
+        {NAV_KEYS.map(({ href, key, icon: Icon }) => {
+          const label = t.nav[key];
           const active = pathname === href || (href !== "/dashboard" && pathname.startsWith(href));
           return (
             <Link
@@ -132,7 +139,7 @@ export function Sidebar() {
               className="flex items-center gap-2 w-full px-3 py-2 text-sm text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
             >
               <LogOut className="w-4 h-4" />
-              <span>Sign Out</span>
+              <span>{t.sidebar.signOut}</span>
             </button>
           </div>
         ) : (
@@ -191,20 +198,20 @@ export function Sidebar() {
                 <X className="w-4 h-4" />
               </button>
             </div>
-            <h3 className="text-base font-bold text-gray-900 mb-1">Sign out of the application?</h3>
-            <p className="text-sm text-gray-500 mb-5">You will be redirected to the login page.</p>
+            <h3 className="text-base font-bold text-gray-900 mb-1">{t.sidebar.confirmTitle}</h3>
+            <p className="text-sm text-gray-500 mb-5">{t.sidebar.confirmMsg}</p>
             <div className="flex gap-3">
               <button
                 onClick={() => signOut({ callbackUrl: "/login" })}
                 className="flex-1 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium transition-colors"
               >
-                Yes, Sign Out
+                {t.sidebar.confirmYes}
               </button>
               <button
                 onClick={() => setShowLogoutConfirm(false)}
                 className="flex-1 py-2.5 border border-gray-200 hover:bg-gray-50 text-gray-600 rounded-lg text-sm font-medium transition-colors"
               >
-                Cancel
+                {t.sidebar.confirmCancel}
               </button>
             </div>
           </div>
