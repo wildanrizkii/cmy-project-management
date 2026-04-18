@@ -8,6 +8,7 @@ import * as XLSX from "xlsx";
 import { useToast } from "@/components/layout/toast-context";
 import { CycleTimeChart } from "@/components/cycletime";
 import type { Project } from "@/types";
+import { useLanguage } from "@/contexts/language-context";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -41,6 +42,8 @@ function EditCtModal({
   onSaved: (updated: Project) => void;
 }) {
   const { toast } = useToast();
+  const { t } = useLanguage();
+  const ct = t.ctPage;
   const rawGroups = parseGroups(project.aktualCt);
   const [targetCt, setTargetCt] = useState(
     project.targetCt !== null && project.targetCt !== undefined
@@ -82,7 +85,7 @@ function EditCtModal({
       toast("error", data.error ?? "Update failed");
       return;
     }
-    toast("success", "Cycle Time has been saved");
+    toast("success", ct.ctSaved);
     onSaved(data);
     onClose();
   };
@@ -116,7 +119,7 @@ function EditCtModal({
           {/* Target CT */}
           <div>
             <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-              Target Cycle Time
+              {ct.targetCtLabel}
             </label>
             <div className="relative w-44">
               <input
@@ -138,7 +141,7 @@ function EditCtModal({
           <div>
             <div className="flex items-center justify-between mb-2">
               <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                Actual CT per Group
+                {ct.actualCtLabel}
               </label>
               <div className="flex gap-2">
                 {groups.length > 0 && (
@@ -146,7 +149,7 @@ function EditCtModal({
                     onClick={removeLastGroup}
                     className="text-xs px-2.5 py-1 text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"
                   >
-                    − Delete {groups[groups.length - 1]?.group}
+                    − {ct.deleteGroup} {groups[groups.length - 1]?.group}
                   </button>
                 )}
                 {groups.length < 26 && (
@@ -154,7 +157,7 @@ function EditCtModal({
                     onClick={addGroup}
                     className="text-xs px-2.5 py-1 text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"
                   >
-                    + Add Group
+                    {ct.addGroup}
                   </button>
                 )}
               </div>
@@ -162,8 +165,8 @@ function EditCtModal({
 
             {groups.length === 0 ? (
               <p className="text-sm text-gray-400 py-4 text-center">
-                Belum ada group. Klik{" "}
-                <span className="text-blue-500 font-medium">+ Add Group</span>.
+                {ct.noGroups}{" "}
+                <span className="text-blue-500 font-medium">{ct.addGroup}</span>.
               </p>
             ) : (
               <div className="grid grid-cols-3 gap-2">
@@ -179,7 +182,7 @@ function EditCtModal({
                       className={`rounded-lg border p-2.5 ${over ? "border-red-200 bg-red-50" : under ? "border-green-200 bg-green-50" : "border-gray-200 bg-gray-50"}`}
                     >
                       <p className="text-xs font-bold text-gray-500 mb-1.5">
-                        Group <span className="text-blue-600">{g.group}</span>
+                        {ct.group} <span className="text-blue-600">{g.group}</span>
                       </p>
                       <div className="relative">
                         <input
@@ -217,13 +220,13 @@ function EditCtModal({
             ) : (
               <Save className="w-3.5 h-3.5" />
             )}
-            Save
+            {t.save}
           </button>
           <button
             onClick={onClose}
             className="px-5 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-100 transition-colors"
           >
-            Cancel
+            {t.cancel}
           </button>
         </div>
       </div>
@@ -236,6 +239,8 @@ function EditCtModal({
 export default function CycleTimePage() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { t } = useLanguage();
+  const ct = t.ctPage;
 
   const [search, setSearch] = useState("");
   const [filterCustomer, setFilterCustomer] = useState("");
@@ -304,7 +309,7 @@ export default function CycleTimePage() {
       wb,
       `cycle-time-${new Date().toISOString().slice(0, 10)}.xlsx`,
     );
-    toast("success", "Export success");
+    toast("success", ct.exportSuccess);
   };
 
   const hasFilter = search || filterCustomer || filterLeader;
@@ -320,7 +325,7 @@ export default function CycleTimePage() {
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Cycle Time</h1>
             <p className="text-sm text-gray-500 mt-0.5">
-              {filtered.length} project(s)
+              {filtered.length} {ct.subtitle}
             </p>
           </div>
         </div>
@@ -342,7 +347,7 @@ export default function CycleTimePage() {
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Cari Assy Number / Assy Name..."
+              placeholder={ct.searchPlaceholder}
               className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
           </div>
@@ -353,7 +358,7 @@ export default function CycleTimePage() {
             onChange={(e) => setFilterCustomer(e.target.value)}
             className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-700"
           >
-            <option value="">All Customer</option>
+            <option value="">{ct.allCustomer}</option>
             {customers.map((c) => (
               <option key={c} value={c}>
                 {c}
@@ -367,7 +372,7 @@ export default function CycleTimePage() {
             onChange={(e) => setFilterLeader(e.target.value)}
             className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-700"
           >
-            <option value="">All Project Leader</option>
+            <option value="">{ct.allLeader}</option>
             {leaders.map((l) => (
               <option key={l} value={l}>
                 {l}
@@ -384,7 +389,7 @@ export default function CycleTimePage() {
               }}
               className="px-3 py-2 text-sm text-gray-500 hover:text-gray-800 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
             >
-              Reset
+              {t.reset}
             </button>
           )}
         </div>
@@ -396,58 +401,48 @@ export default function CycleTimePage() {
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b border-gray-100">
-              <tr>
-                {/* Fixed columns */}
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">
+            <thead>
+              <tr className="bg-blue-600 text-white">
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider whitespace-nowrap">
                   Assy Number
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider whitespace-nowrap">
                   Assy Name
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider whitespace-nowrap">
                   Customer
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider whitespace-nowrap">
                   Project Leader
                 </th>
-                {/* Target CT */}
-                <th className="px-4 py-3 text-center text-xs font-semibold text-blue-600 uppercase tracking-wider whitespace-nowrap bg-blue-50/50">
-                  Target CT <span className="font-normal text-gray-400"></span>
+                <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider whitespace-nowrap bg-blue-700">
+                  Target CT
                 </th>
-                {/* Dynamic group columns */}
                 {groupLabels.map((label) => (
                   <th
                     key={label}
-                    className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap"
+                    className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider whitespace-nowrap"
                   >
-                    Group {label}{" "}
-                    <span className="font-normal text-gray-400"></span>
+                    Group {label}
                   </th>
                 ))}
-                <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">
-                  Action
+                <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider whitespace-nowrap">
+                  {ct.action}
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-50">
+            <tbody className="divide-y divide-gray-100">
               {isLoading ? (
                 <tr>
-                  <td
-                    colSpan={5 + groupLabels.length + 1}
-                    className="py-16 text-center text-gray-400"
-                  >
+                  <td colSpan={5 + groupLabels.length + 1} className="py-20 text-center">
                     <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
-                    Loading...
+                    <p className="text-sm text-gray-400">Loading...</p>
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td
-                    colSpan={5 + groupLabels.length + 1}
-                    className="py-16 text-center text-gray-400"
-                  >
-                    No data found
+                  <td colSpan={5 + groupLabels.length + 1} className="py-20 text-center">
+                    <p className="text-sm font-medium text-gray-400">{ct.noData}</p>
                   </td>
                 </tr>
               ) : (
@@ -456,77 +451,52 @@ export default function CycleTimePage() {
                   const target = p.targetCt;
 
                   return (
-                    <tr
-                      key={p.id}
-                      className="hover:bg-gray-50/70 transition-colors"
-                    >
-                      {/* Assy Number */}
-                      <td className="px-4 py-3 font-mono font-medium text-gray-600 text-xs whitespace-nowrap">
-                        {p.assNumber}
+                    <tr key={p.id} className="hover:bg-blue-50/20 transition-colors group">
+                      <td className="px-4 py-3.5 whitespace-nowrap">
+                        <span className="font-mono text-xs font-semibold bg-gray-100 text-gray-600 px-2 py-0.5 rounded">
+                          {p.assNumber}
+                        </span>
                       </td>
-                      {/* Assy Name */}
-                      <td className="px-4 py-3">
-                        <p className="font-medium text-gray-900">{p.assName}</p>
-                        <p className="text-xs text-gray-400 mt-0.5">
-                          {p.model}
-                        </p>
+                      <td className="px-4 py-3.5">
+                        <p className="font-semibold text-gray-900">{p.assName}</p>
+                        <p className="text-xs text-gray-400 mt-0.5">{p.model}</p>
                       </td>
-                      {/* Customer */}
-                      <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
+                      <td className="px-4 py-3.5 text-sm text-gray-600 whitespace-nowrap">
                         {p.customer}
                       </td>
-                      {/* Project Leader */}
-                      <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
-                        {p.projectLeader?.name ?? "-"}
+                      <td className="px-4 py-3.5 text-sm text-gray-600 whitespace-nowrap">
+                        {p.projectLeader?.name ?? "—"}
                       </td>
-                      {/* Target CT */}
-                      <td className="px-4 py-3 text-center bg-blue-50/30 whitespace-nowrap">
+                      <td className="px-4 py-3.5 text-center bg-blue-50/40 whitespace-nowrap">
                         {target !== null && target !== undefined ? (
                           <span className="inline-flex items-center justify-center px-3 py-1 rounded-full bg-blue-100 text-blue-700 font-bold text-sm">
                             {target}
                           </span>
                         ) : (
-                          <span className="text-gray-300 text-base">-</span>
+                          <span className="text-gray-300">—</span>
                         )}
                       </td>
-                      {/* Group columns */}
                       {groupLabels.map((label) => {
                         const g = groups.find((x) => x.group === label);
                         const val = g?.value;
-                        const isOver =
-                          target !== null &&
-                          target !== undefined &&
-                          val !== null &&
-                          val !== undefined &&
-                          val > target;
-                        const isUnder =
-                          target !== null &&
-                          target !== undefined &&
-                          val !== null &&
-                          val !== undefined &&
-                          val <= target;
+                        const isOver = target !== null && target !== undefined && val !== null && val !== undefined && val > target;
+                        const isUnder = target !== null && target !== undefined && val !== null && val !== undefined && val <= target;
                         return (
-                          <td
-                            key={label}
-                            className="px-4 py-3 text-center whitespace-nowrap"
-                          >
+                          <td key={label} className="px-4 py-3.5 text-center whitespace-nowrap">
                             {val !== null && val !== undefined ? (
-                              <span
-                                className={`inline-flex items-center justify-center px-3 py-1 rounded-full font-semibold text-sm ${isOver ? "bg-green-100 text-green-700" : isUnder ? " bg-red-100 text-red-700" : "bg-gray-100 text-gray-600"}`}
-                              >
+                              <span className={`inline-flex items-center justify-center px-3 py-1 rounded-full font-semibold text-sm ${isOver ? "bg-green-100 text-green-700" : isUnder ? "bg-red-100 text-red-700" : "bg-gray-100 text-gray-600"}`}>
                                 {val}
                               </span>
                             ) : (
-                              <span className="text-gray-300 text-base">-</span>
+                              <span className="text-gray-300">—</span>
                             )}
                           </td>
                         );
                       })}
-                      {/* Edit action */}
-                      <td className="px-4 py-3 text-center">
+                      <td className="px-4 py-3.5 text-center">
                         <button
                           onClick={() => setEditProject(p)}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors whitespace-nowrap"
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors whitespace-nowrap opacity-0 group-hover:opacity-100"
                         >
                           <Timer className="w-3.5 h-3.5" />
                           Edit CT

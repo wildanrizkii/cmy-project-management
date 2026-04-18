@@ -7,6 +7,7 @@ import { Calendar, ChevronLeft, ChevronRight, CheckCircle2, Clock, AlertTriangle
 import { FASE_LABELS } from "@/types";
 import type { FaseType } from "@/types";
 import { formatDate } from "@/lib/utils";
+import { useLanguage } from "@/contexts/language-context";
 
 type EventStatus = "ON_PROGRESS" | "NEAR_DEADLINE" | "LATE_INTERNAL" | "LATE_CRITICAL" | "DONE";
 
@@ -54,6 +55,8 @@ function EditEventModal({
   event: CalendarEvent | null;
   onSave: (updatedEvent: CalendarEvent) => void;
 }) {
+  const { t } = useLanguage();
+  const cl = t.cal;
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
     picStartDate: "",
@@ -106,7 +109,7 @@ function EditEventModal({
       onClose();
     } catch (error) {
       console.error("Failed to save:", error);
-      alert("Failed to save changes. Please try again.");
+      alert(cl.failedSave);
     } finally {
       setSaving(false);
     }
@@ -117,7 +120,7 @@ function EditEventModal({
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <div>
-            <h3 className="text-lg font-bold text-gray-900">Edit Event Dates</h3>
+            <h3 className="text-lg font-bold text-gray-900">{cl.editTitle}</h3>
             <p className="text-sm text-gray-500 truncate max-w-62.5">{event.subFaseName}</p>
           </div>
           <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
@@ -128,19 +131,19 @@ function EditEventModal({
         <div className="p-6 space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-semibold text-gray-600 mb-1.5">PIC Start Date</label>
+              <label className="block text-xs font-semibold text-gray-600 mb-1.5">{cl.picStartDate}</label>
               <input type="date" value={form.picStartDate} onChange={(e) => setForm({ ...form, picStartDate: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-gray-600 mb-1.5">PIC Target Date</label>
+              <label className="block text-xs font-semibold text-gray-600 mb-1.5">{cl.picTargetDate}</label>
               <input type="date" value={form.picTargetDate} onChange={(e) => setForm({ ...form, picTargetDate: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-gray-600 mb-1.5">Customer Start Date</label>
+              <label className="block text-xs font-semibold text-gray-600 mb-1.5">{cl.custStartDate}</label>
               <input type="date" value={form.customerStartDate} onChange={(e) => setForm({ ...form, customerStartDate: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-gray-600 mb-1.5">Customer Target Date</label>
+              <label className="block text-xs font-semibold text-gray-600 mb-1.5">{cl.custTargetDate}</label>
               <input type="date" value={form.customerTargetDate} onChange={(e) => setForm({ ...form, customerTargetDate: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
           </div>
@@ -155,10 +158,10 @@ function EditEventModal({
         <div className="flex gap-3 px-6 py-4 border-t border-gray-100 bg-gray-50 rounded-b-2xl">
           <button onClick={handleSave} disabled={saving} className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors">
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-            {saving ? "Saving..." : "Save Changes"}
+            {saving ? cl.saving : cl.saveChanges}
           </button>
           <button onClick={onClose} disabled={saving} className="flex-1 px-4 py-2 border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors disabled:opacity-50">
-            Cancel
+            {t.cancel}
           </button>
         </div>
       </div>
@@ -169,6 +172,8 @@ function EditEventModal({
 // ─── Event Card ───────────────────────────────────────────────────────────────
 
 function EventCard({ event, onEdit }: { event: CalendarEvent; onEdit: (event: CalendarEvent) => void }) {
+  const { t } = useLanguage();
+  const cl = t.cal;
   const cfg = STATUS_CONFIG[event.status];
   const Icon = cfg.icon;
 
@@ -177,7 +182,7 @@ function EventCard({ event, onEdit }: { event: CalendarEvent; onEdit: (event: Ca
       <button
         onClick={() => onEdit(event)}
         className="absolute top-2 right-2 p-1.5 text-blue-500 hover:text-blue-600 bg-white/80 rounded-lg transition-all"
-        title="Edit dates"
+        title={cl.editDateTitle}
       >
         <Edit2 className="w-4 h-4" />
       </button>
@@ -194,19 +199,19 @@ function EventCard({ event, onEdit }: { event: CalendarEvent; onEdit: (event: Ca
       <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500">
         <span>PIC: <span className="font-medium text-gray-700">{event.picName}</span></span>
         {event.picTargetDate && (
-          <span>PIC Target: <span className="font-medium text-gray-700">{formatDate(event.picTargetDate)}</span></span>
+          <span>{cl.picTarget}: <span className="font-medium text-gray-700">{formatDate(event.picTargetDate)}</span></span>
         )}
         {event.customerTargetDate && (
-          <span>Cust. Target: <span className="font-medium text-gray-700">{formatDate(event.customerTargetDate)}</span></span>
+          <span>{cl.custTarget}: <span className="font-medium text-gray-700">{formatDate(event.customerTargetDate)}</span></span>
         )}
       </div>
       {!event.isDone && event.picTargetDate && (
         <p className={`text-xs font-medium mt-1.5 ${cfg.color}`}>
           {event.daysFromPicTarget < 0
-            ? `Overdue by ${Math.abs(event.daysFromPicTarget)} day(s) from PIC target`
+            ? `${cl.overdueBy} ${Math.abs(event.daysFromPicTarget)} ${cl.daysFromPicTarget}`
             : event.daysFromPicTarget === 0
-              ? "Due today"
-              : `${event.daysFromPicTarget} day(s) remaining`}
+              ? cl.dueToday
+              : `${event.daysFromPicTarget} ${cl.daysRemaining}`}
         </p>
       )}
     </div>
@@ -328,6 +333,8 @@ function MiniCalendar({
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function CalendarPage() {
+  const { t } = useLanguage();
+  const cl = t.cal;
   const queryClient = useQueryClient();
   const [filterLeader, setFilterLeader] = useState("");
   const [filterPic, setFilterPic] = useState("");
@@ -418,7 +425,7 @@ export default function CalendarPage() {
       {/* Header */}
       <div className="mb-5">
         <h1 className="text-2xl font-bold text-gray-900">Calendar of Events</h1>
-        <p className="text-sm text-gray-500 mt-0.5">{events.length} SubPhase event(s)</p>
+        <p className="text-sm text-gray-500 mt-0.5">{events.length} {cl.subtitle}</p>
       </div>
 
       <div className="flex gap-5 items-start">
@@ -444,7 +451,7 @@ export default function CalendarPage() {
               onChange={(e) => setFilterLeader(e.target.value)}
               className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-700"
             >
-              <option value="">All Project Leaders</option>
+              <option value="">{cl.allLeaders}</option>
               {filterOptions.leaders.map((l: { id: string; name: string }) => (
                 <option key={l.id} value={l.id}>{l.name}</option>
               ))}
@@ -454,7 +461,7 @@ export default function CalendarPage() {
               onChange={(e) => setFilterPic(e.target.value)}
               className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-700"
             >
-              <option value="">All PICs</option>
+              <option value="">{cl.allPics}</option>
               {filterOptions.pics.map((p: { id: string; name: string }) => (
                 <option key={p.id} value={p.id}>{p.name}</option>
               ))}
@@ -464,7 +471,7 @@ export default function CalendarPage() {
               onChange={(e) => setFilterFase(e.target.value as FaseType | "")}
               className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-700"
             >
-              <option value="">All Phases</option>
+              <option value="">{cl.allPhases}</option>
               {Object.entries(FASE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
             </select>
             <select
@@ -472,16 +479,16 @@ export default function CalendarPage() {
               onChange={(e) => setFilterStatus(e.target.value)}
               className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-700"
             >
-              <option value="">All Statuses</option>
-              <option value="HIDE_DONE">Hide Completed</option>
-              <option value="ONLY_LATE">Late Only</option>
+              <option value="">{cl.allStatuses}</option>
+              <option value="HIDE_DONE">{cl.hideDone}</option>
+              <option value="ONLY_LATE">{cl.lateOnly}</option>
             </select>
             {hasFilters && (
               <button
                 onClick={() => { setFilterLeader(""); setFilterPic(""); setFilterFase(""); setFilterStatus(""); setSelectedDay(null); }}
                 className="px-3 py-1.5 text-sm text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-1"
               >
-                <X className="w-3.5 h-3.5" /> Reset
+                <X className="w-3.5 h-3.5" /> {t.reset}
               </button>
             )}
           </div>
@@ -492,7 +499,7 @@ export default function CalendarPage() {
               <div className="flex items-center gap-2">
                 <Calendar className="w-4 h-4 text-blue-600" />
                 <span className="text-sm font-medium text-blue-800">{selectedDayLabel}</span>
-                <span className="text-xs text-blue-600 bg-blue-100 px-2 py-0.5 rounded-full">{filteredEvents.length} event(s)</span>
+                <span className="text-xs text-blue-600 bg-blue-100 px-2 py-0.5 rounded-full">{filteredEvents.length} {cl.eventsCount}</span>
               </div>
               <button onClick={() => setSelectedDay(null)} className="text-blue-500 hover:text-blue-700 transition-colors">
                 <X className="w-4 h-4" />
@@ -522,11 +529,11 @@ export default function CalendarPage() {
             <div className="py-20 text-center bg-white rounded-xl border border-gray-100">
               <Calendar className="w-10 h-10 mx-auto mb-3 text-gray-200" />
               <p className="text-gray-400 text-sm font-medium">
-                {selectedDay ? "No events on this date" : "No events found"}
+                {selectedDay ? cl.noEventsDate : cl.noEvents}
               </p>
               {selectedDay && (
                 <button onClick={() => setSelectedDay(null)} className="mt-3 text-xs text-blue-600 hover:underline">
-                  Show all events
+                  {cl.showAll}
                 </button>
               )}
             </div>

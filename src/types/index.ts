@@ -48,6 +48,7 @@ export interface SubFase {
   id: string;
   projectFaseId: string;
   projectId: string;
+  parentSubFaseId: string | null;
   name: string;
   description: string | null;
   picId: string;
@@ -61,6 +62,7 @@ export interface SubFase {
   gcalEventId: string | null;
   createdAt: string;
   updatedAt: string;
+  children?: SubFase[];
 }
 
 export interface ProjectFase {

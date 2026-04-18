@@ -10,6 +10,7 @@ import {
 import { DEPARTMENT_LABELS } from "@/types";
 import type { User, Department } from "@/types";
 import { useToast } from "@/components/layout/toast-context";
+import { useLanguage } from "@/contexts/language-context";
 
 const DEPT_OPTIONS = Object.entries(DEPARTMENT_LABELS).map(([value, label]) => ({ value, label }));
 
@@ -29,6 +30,8 @@ export default function UsersPage() {
   const { data: session } = useSession();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { t } = useLanguage();
+  const us = t.users;
 
   const [search, setSearch] = useState("");
   const [filterDept, setFilterDept] = useState("");
@@ -49,9 +52,9 @@ export default function UsersPage() {
     mutationFn: (u: User) => apiFetch(`/api/users/${u.id}`, { method: "DELETE" }).then((r) => r.json()),
     onSuccess: (_, u) => {
       queryClient.invalidateQueries({ queryKey: ["users"] });
-      toast("success", `User ${u.name} deleted`);
+      toast("success", `User ${u.name} ${us.toastDeleted}`);
     },
-    onError: () => toast("error", "Failed to delete user"),
+    onError: () => toast("error", us.toastDeleteFailed),
   });
 
   const filtered = users.filter((u) => {
@@ -133,12 +136,12 @@ export default function UsersPage() {
 
     queryClient.invalidateQueries({ queryKey: ["users"] });
     setShowModal(false);
-    toast("success", editUser ? `User ${form.name} updated` : `User ${form.name} added`);
+    toast("success", editUser ? `User ${form.name} ${us.toastUpdated}` : `User ${form.name} ${us.toastAdded}`);
   };
 
   const handleDelete = (u: User) => {
     if (u.id === session?.user?.id) return;
-    if (confirm(`Delete user "${u.name}"? This action cannot be undone.`)) {
+    if (confirm(`${us.confirmDelete} "${u.name}"? ${us.confirmDeleteMsg}`)) {
       deleteMutation.mutate(u);
     }
   };
@@ -149,23 +152,23 @@ export default function UsersPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">User Management</h1>
-          <p className="text-sm text-gray-500 mt-0.5">{users.length} user(s) registered</p>
+          <p className="text-sm text-gray-500 mt-0.5">{users.length} {us.subtitle}</p>
         </div>
         <button
           onClick={openAdd}
           className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors shadow-sm"
         >
           <Plus className="w-4 h-4" />
-          Add User
+          {us.addUser}
         </button>
       </div>
 
       {/* Stats */}
       <div className="grid grid-cols-3 gap-4">
         {[
-          { label: "Total Users", value: users.length, icon: Users, color: "text-blue-600 bg-blue-50" },
-          { label: "Web Access", value: users.filter((u) => WEB_ACCESS_DEPARTMENTS.includes(u.department ?? "")).length, icon: ShieldCheck, color: "text-purple-600 bg-purple-50" },
-          { label: "PIC Only", value: users.filter((u) => !WEB_ACCESS_DEPARTMENTS.includes(u.department ?? "")).length, icon: UserIcon, color: "text-green-600 bg-green-50" },
+          { label: us.kpiTotal, value: users.length, icon: Users, color: "text-blue-600 bg-blue-50" },
+          { label: us.kpiWebAccess, value: users.filter((u) => WEB_ACCESS_DEPARTMENTS.includes(u.department ?? "")).length, icon: ShieldCheck, color: "text-purple-600 bg-purple-50" },
+          { label: us.kpiPicOnly, value: users.filter((u) => !WEB_ACCESS_DEPARTMENTS.includes(u.department ?? "")).length, icon: UserIcon, color: "text-green-600 bg-green-50" },
         ].map(({ label, value, icon: Icon, color }) => (
           <div key={label} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 flex items-center gap-4">
             <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${color}`}>
@@ -186,7 +189,7 @@ export default function UsersPage() {
           <input
             value={search}
             onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-            placeholder="Search by name or email..."
+            placeholder={us.searchPlaceholder}
             className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
@@ -195,7 +198,7 @@ export default function UsersPage() {
           onChange={(e) => { setFilterDept(e.target.value); setPage(1); }}
           className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-700"
         >
-          <option value="">All Departments</option>
+          <option value="">{us.allDepartments}</option>
           {DEPT_OPTIONS.map((d) => <option key={d.value} value={d.value}>{d.label}</option>)}
         </select>
         {(search || filterDept) && (
@@ -203,7 +206,7 @@ export default function UsersPage() {
             onClick={() => { setSearch(""); setFilterDept(""); setPage(1); }}
             className="px-3 py-2 text-sm text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
           >
-            Reset
+            {t.reset}
           </button>
         )}
       </div>
@@ -211,63 +214,72 @@ export default function UsersPage() {
       {/* Table */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
         <table className="w-full text-sm">
-          <thead className="bg-gray-50 border-b border-gray-100">
-            <tr>
-              {["Name", "Email", "Department", "Web Access", "Actions"].map((h) => (
-                <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+          <thead>
+            <tr className="bg-blue-600 text-white">
+              {[us.colName, us.colEmail, us.colDept, us.colWebAccess, us.colActions].map((h) => (
+                <th key={h} className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider whitespace-nowrap">
                   {h}
                 </th>
               ))}
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-50">
+          <tbody className="divide-y divide-gray-100">
             {isLoading ? (
               <tr>
-                <td colSpan={5} className="py-16 text-center text-gray-400">
+                <td colSpan={5} className="py-20 text-center">
                   <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
-                  Loading...
+                  <p className="text-sm text-gray-400">Loading...</p>
                 </td>
               </tr>
             ) : paginated.length === 0 ? (
               <tr>
-                <td colSpan={5} className="py-16 text-center text-gray-400">No users found</td>
+                <td colSpan={5} className="py-20 text-center">
+                  <p className="text-sm font-medium text-gray-400">{us.noUsers}</p>
+                </td>
               </tr>
             ) : (
               paginated.map((u) => {
                 const hasWebAccess = WEB_ACCESS_DEPARTMENTS.includes(u.department ?? "");
                 return (
-                  <tr key={u.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-4 py-3">
+                  <tr key={u.id} className="hover:bg-blue-50/20 transition-colors group">
+                    <td className="px-4 py-3.5">
                       <div className="flex items-center gap-3">
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${hasWebAccess
+                        <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 shadow-sm ${hasWebAccess
                           ? "bg-linear-to-br from-blue-500 to-blue-700"
-                          : "bg-linear-to-br from-gray-400 to-gray-600"
+                          : "bg-linear-to-br from-gray-400 to-gray-500"
                           }`}>
-                          <span className="text-xs font-bold text-white">{u.name.charAt(0).toUpperCase()}</span>
+                          <span className="text-sm font-bold text-white">{u.name.charAt(0).toUpperCase()}</span>
                         </div>
-                        <span className="font-medium text-gray-900">{u.name}</span>
-                        {u.id === session?.user?.id && (
-                          <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-medium">You</span>
-                        )}
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold text-gray-900">{u.name}</span>
+                            {u.id === session?.user?.id && (
+                              <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full font-medium">{us.youBadge}</span>
+                            )}
+                          </div>
+                        </div>
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-gray-600">{u.email}</td>
-                    <td className="px-4 py-3 text-gray-600">
-                      {u.department ? DEPARTMENT_LABELS[u.department as Department] ?? u.department : "-"}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${hasWebAccess
-                        ? "bg-green-100 text-green-700"
-                        : "bg-gray-100 text-gray-600"
-                        }`}>
-                        {hasWebAccess ? "Yes" : "No"}
+                    <td className="px-4 py-3.5 text-sm text-gray-500">{u.email}</td>
+                    <td className="px-4 py-3.5">
+                      <span className="text-sm text-gray-600">
+                        {u.department ? DEPARTMENT_LABELS[u.department as Department] ?? u.department : "—"}
                       </span>
                     </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-1">
+                    <td className="px-4 py-3.5">
+                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${hasWebAccess
+                        ? "bg-green-100 text-green-700"
+                        : "bg-gray-100 text-gray-500"
+                        }`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${hasWebAccess ? "bg-green-500" : "bg-gray-400"}`} />
+                        {hasWebAccess ? us.webYes : us.webNo}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3.5">
+                      <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button
                           onClick={() => openEdit(u)}
-                          className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                          className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                           title="Edit"
                         >
                           <Edit2 className="w-4 h-4" />
@@ -275,7 +287,7 @@ export default function UsersPage() {
                         {u.id !== session?.user?.id && (
                           <button
                             onClick={() => handleDelete(u)}
-                            className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                            className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                             title="Delete"
                           >
                             <Trash2 className="w-4 h-4" />
@@ -294,7 +306,7 @@ export default function UsersPage() {
         {totalPages > 1 && (
           <div className="px-4 py-3 border-t border-gray-100 flex items-center justify-between">
             <p className="text-sm text-gray-500">
-              {(page - 1) * perPage + 1}–{Math.min(page * perPage, filtered.length)} of {filtered.length} users
+              {(page - 1) * perPage + 1}–{Math.min(page * perPage, filtered.length)} {us.ofLabel} {filtered.length} {us.usersSuffix}
             </p>
             <div className="flex items-center gap-1">
               <button
@@ -332,7 +344,7 @@ export default function UsersPage() {
           <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md">
             <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100">
               <h2 className="text-lg font-bold text-gray-900">
-                {editUser ? "Edit User" : "Add New User"}
+                {editUser ? us.editTitle : us.addTitle}
               </h2>
               <button onClick={() => setShowModal(false)} className="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg">
                 <X className="w-5 h-5" />
@@ -345,7 +357,7 @@ export default function UsersPage() {
               )}
 
               <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">Department *</label>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">{us.formDept}</label>
                 <select
                   value={form.department}
                   onChange={(e) => setForm({ ...form, department: e.target.value })}
@@ -356,18 +368,18 @@ export default function UsersPage() {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">Full Name *</label>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">{us.formName}</label>
                 <input
                   required
                   value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
                   className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Full name..."
+                  placeholder={us.formNamePh}
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">Email *</label>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">{us.formEmail}</label>
                 <input
                   required
                   type="email"
@@ -383,7 +395,7 @@ export default function UsersPage() {
                 <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-start gap-2">
                   <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                   <p className="text-xs text-amber-800">
-                    Users in this department <strong>do not have access to the web</strong>. They can only be assigned as PICs on projects.
+                    {us.noWebAlert}
                   </p>
                 </div>
               )}
@@ -392,7 +404,7 @@ export default function UsersPage() {
               {canAccessWeb && (
                 <div>
                   <label className="block text-xs font-semibold text-gray-600 mb-1">
-                    {editUser ? "New Password (leave blank to keep current)" : "Password *"}
+                    {editUser ? us.formPasswordEdit : us.formPassword}
                   </label>
                   <input
                     required={!editUser}
@@ -401,7 +413,7 @@ export default function UsersPage() {
                     value={form.password}
                     onChange={(e) => setForm({ ...form, password: e.target.value })}
                     className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="Minimum 8 characters"
+                    placeholder={us.formMinPass}
                   />
                 </div>
               )}
@@ -413,14 +425,14 @@ export default function UsersPage() {
                   className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
                 >
                   {saving && <Loader2 className="w-4 h-4 animate-spin" />}
-                  {editUser ? "Save Changes" : "Add User"}
+                  {editUser ? us.saveChanges : us.addUserBtn}
                 </button>
                 <button
                   type="button"
                   onClick={() => setShowModal(false)}
                   className="px-5 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 transition-colors"
                 >
-                  Cancel
+                  {t.cancel}
                 </button>
               </div>
             </form>

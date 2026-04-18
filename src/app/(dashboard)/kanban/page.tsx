@@ -15,6 +15,7 @@ import {
 import type { Project, ProjectStatus, FaseType } from "@/types";
 import { ProjectDetailModal } from "@/components/proyek/project-detail-modal";
 import { useToast } from "@/components/layout/toast-context";
+import { useLanguage } from "@/contexts/language-context";
 import { X } from "lucide-react";
 
 type Mode = "status" | "fase";
@@ -37,6 +38,8 @@ const FASE_COLUMNS: { id: FaseType; label: string; color: string }[] = [
 export default function KanbanPage() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { t } = useLanguage();
+  const kb = t.kanban;
   const [mode, setMode] = useState<Mode>("status");
   const [confirmSelesai, setConfirmSelesai] = useState<{ id: string; assName: string } | null>(null);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
@@ -123,7 +126,7 @@ export default function KanbanPage() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-xl font-bold text-gray-900">Kanban Board</h1>
-            <p className="text-sm text-gray-500">{filtered.length} project(s)</p>
+            <p className="text-sm text-gray-500">{filtered.length} {kb.projectCount}</p>
           </div>
 
           {/* Mode toggle */}
@@ -135,7 +138,7 @@ export default function KanbanPage() {
               }`}
             >
               <LayoutGrid className="w-4 h-4" />
-              By Status
+              {kb.byStatus}
             </button>
             <button
               onClick={() => setMode("fase")}
@@ -144,7 +147,7 @@ export default function KanbanPage() {
               }`}
             >
               <LayoutGrid className="w-4 h-4" />
-              By Phase
+              {kb.byPhase}
             </button>
           </div>
         </div>
@@ -156,7 +159,7 @@ export default function KanbanPage() {
             onChange={(e) => setFilterLeader(e.target.value)}
             className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-700"
           >
-            <option value="">All Project Leaders</option>
+            <option value="">{kb.allLeaders}</option>
             {uniqueLeaders.map((leader) => leader && (
               <option key={leader.id} value={leader.id}>{leader.name}</option>
             ))}
@@ -166,7 +169,7 @@ export default function KanbanPage() {
             onChange={(e) => setFilterPriority(e.target.value)}
             className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-700"
           >
-            <option value="">All Priorities</option>
+            <option value="">{kb.allPriorities}</option>
             {Object.entries(PRIORITY_LABELS).map(([k, v]) => (
               <option key={k} value={k}>{v}</option>
             ))}
@@ -176,7 +179,7 @@ export default function KanbanPage() {
               onClick={() => { setFilterLeader(""); setFilterPriority(""); }}
               className="px-3 py-1.5 text-sm text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50"
             >
-              Reset
+              {t.reset}
             </button>
           )}
         </div>
@@ -224,7 +227,7 @@ export default function KanbanPage() {
                         {provided.placeholder}
                         {colProjects.length === 0 && (
                           <div className="py-8 text-center text-gray-400 text-xs">
-                            No projects
+                            {kb.noProjects}
                           </div>
                         )}
                       </div>
@@ -244,7 +247,7 @@ export default function KanbanPage() {
                       }
                       className="mx-3 mb-3 py-1.5 text-xs text-gray-500 hover:text-gray-800 bg-white/60 hover:bg-white/90 rounded-lg border border-current/10 transition-colors"
                     >
-                      {isExpanded ? "Show less" : `+${hidden} more project(s)`}
+                      {isExpanded ? kb.showLess : `+${hidden} ${kb.moreSuffix}`}
                     </button>
                   )}
                 </div>
@@ -278,9 +281,9 @@ export default function KanbanPage() {
                 <X className="w-4 h-4" />
               </button>
             </div>
-            <h3 className="text-base font-bold text-gray-900 mb-1">Mark as Completed?</h3>
+            <h3 className="text-base font-bold text-gray-900 mb-1">{kb.confirmComplete}</h3>
             <p className="text-sm text-gray-500 mb-5">
-              Project <span className="font-medium text-gray-800">{confirmSelesai.assName}</span> will be marked as completed.
+              Project <span className="font-medium text-gray-800">{confirmSelesai.assName}</span> {kb.confirmCompleteMsg}
             </p>
             <div className="flex gap-3">
               <button
@@ -290,13 +293,13 @@ export default function KanbanPage() {
                 }}
                 className="flex-1 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium transition-colors"
               >
-                Yes, Complete
+                {kb.yesComplete}
               </button>
               <button
                 onClick={() => setConfirmSelesai(null)}
                 className="flex-1 py-2.5 border border-gray-200 hover:bg-gray-50 text-gray-600 rounded-lg text-sm font-medium transition-colors"
               >
-                Cancel
+                {t.cancel}
               </button>
             </div>
           </div>

@@ -20,7 +20,14 @@ export async function GET(
       fases: {
         include: {
           subFases: {
-            include: { pic: { select: USER_SELECT } },
+            where: { parentSubFaseId: null },
+            include: {
+              pic: { select: USER_SELECT },
+              children: {
+                include: { pic: { select: USER_SELECT } },
+                orderBy: { createdAt: "asc" },
+              },
+            },
             orderBy: { createdAt: "asc" },
           },
         },
@@ -87,7 +94,14 @@ export async function PATCH(
       projectLeader: { select: USER_SELECT },
       fases: {
         include: {
-          subFases: { include: { pic: { select: USER_SELECT } } },
+          subFases: {
+            where: { parentSubFaseId: null },
+            include: {
+              pic: { select: USER_SELECT },
+              children: { include: { pic: { select: USER_SELECT } }, orderBy: { createdAt: "asc" } },
+            },
+            orderBy: { createdAt: "asc" },
+          },
         },
         orderBy: { fase: "asc" },
       },

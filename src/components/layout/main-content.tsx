@@ -9,14 +9,8 @@ import { Menu, Search, X } from "lucide-react";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/fetch-client";
-
-const PAGE_TITLES: Record<string, string> = {
-  "/dashboard": "Dashboard",
-  "/proyek": "Daftar Proyek",
-  "/kanban": "Kanban Board",
-  "/users": "Manajemen User",
-  "/profile": "Profil Saya",
-};
+import { useLanguage } from "@/contexts/language-context";
+import type { Lang } from "@/lib/i18n";
 
 type SearchProject = { id: string; assNumber: string; assName: string };
 
@@ -102,12 +96,27 @@ function GlobalSearch() {
   );
 }
 
+function LangSwitcher() {
+  const { lang, setLang } = useLanguage();
+  return (
+    <select
+      value={lang}
+      onChange={(e) => setLang(e.target.value as Lang)}
+      className="text-xs font-semibold border border-gray-200 rounded-lg px-2 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+    >
+      <option value="en">EN</option>
+      <option value="id">ID</option>
+    </select>
+  );
+}
+
 export function MainContent({ children }: { children: React.ReactNode }) {
   const { collapsed, setMobileOpen } = useSidebar();
   const { data: session } = useSession();
   const pathname = usePathname();
   const router = useRouter();
-  const title = PAGE_TITLES[pathname] ?? "CMW Project";
+  const { t } = useLanguage();
+  const title = t.pageTitles[pathname] ?? "CMW Project";
 
   // Track if we're on desktop to apply sidebar offset
   const [isDesktop, setIsDesktop] = useState(false);
@@ -140,6 +149,7 @@ export function MainContent({ children }: { children: React.ReactNode }) {
         </div>
         <div className="flex items-center gap-3">
           <GlobalSearch />
+          <LangSwitcher />
           <NotificationBell />
           <button
             onClick={() => router.push("/profile")}

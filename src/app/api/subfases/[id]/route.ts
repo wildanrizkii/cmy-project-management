@@ -1,7 +1,7 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { NextRequest } from "next/server";
-import { createCalendarEvent, updateCalendarEvent, deleteCalendarEvent } from "@/lib/gcal";
+// import { createCalendarEvent, updateCalendarEvent, deleteCalendarEvent } from "@/lib/gcal"; // disabled: uses personal refresh token
 
 const USER_SELECT = { id: true, name: true, email: true, role: true, department: true, createdAt: true };
 
@@ -44,38 +44,8 @@ export async function PATCH(
     include: { pic: { select: USER_SELECT } },
   });
 
-  // Sync to Google Calendar
-  const newPicTarget = picTargetDate !== undefined ? picTargetDate : subFase.picTargetDate?.toISOString();
-  const newPicStart = picStartDate !== undefined ? picStartDate : subFase.picStartDate?.toISOString();
-  const effectiveName = name ?? subFase.name;
-
-  if (newPicTarget) {
-    try {
-      const project = await db.project.findUnique({
-        where: { id: subFase.projectId },
-        select: { assNumber: true, assName: true },
-      });
-      const pic = await db.user.findUnique({ where: { id: updated.picId }, select: { name: true, email: true } });
-      const payload = {
-        summary: `[${project?.assNumber}] ${effectiveName}`,
-        description: `Project: ${project?.assName}\nPIC: ${pic?.name}\nPhase: ${subFase.projectFase.fase}`,
-        startDate: newPicStart || newPicTarget,
-        endDate: newPicTarget,
-        attendeeEmail: pic?.email ?? undefined,
-      };
-
-      if (subFase.gcalEventId) {
-        await updateCalendarEvent(subFase.gcalEventId, payload);
-      } else {
-        const gcalEventId = await createCalendarEvent(payload);
-        if (gcalEventId) {
-          await db.subFase.update({ where: { id }, data: { gcalEventId } });
-        }
-      }
-    } catch (e) {
-      console.error("GCal sync error (update):", e);
-    }
-  }
+  // Google Calendar sync disabled (uses personal refresh token)
+  // if (newPicTarget) { ... updateCalendarEvent / createCalendarEvent ... }
 
   if (isDone !== undefined) {
     await db.activityLog.create({
@@ -102,14 +72,8 @@ export async function DELETE(
   const subFase = await db.subFase.findUnique({ where: { id } });
   if (!subFase) return Response.json({ error: "SubPhase not found" }, { status: 404 });
 
-  // Delete from Google Calendar first
-  if (subFase.gcalEventId) {
-    try {
-      await deleteCalendarEvent(subFase.gcalEventId);
-    } catch (e) {
-      console.error("GCal sync error (delete):", e);
-    }
-  }
+  // Google Calendar delete disabled (uses personal refresh token)
+  // if (subFase.gcalEventId) { ... deleteCalendarEvent ... }
 
   await db.subFase.delete({ where: { id } });
 

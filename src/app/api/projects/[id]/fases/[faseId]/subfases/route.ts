@@ -1,7 +1,7 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { NextRequest } from "next/server";
-import { createCalendarEvent, sendSubFaseEmail } from "@/lib/gcal";
+// import { createCalendarEvent, sendSubFaseEmail } from "@/lib/gcal"; // disabled: uses personal refresh token
 
 const USER_SELECT = { id: true, name: true, email: true, role: true, department: true, createdAt: true };
 
@@ -20,7 +20,7 @@ export async function POST(
   }
 
   const body = await req.json();
-  const { name, description, picId, customerStartDate, customerTargetDate, picStartDate, picTargetDate, documentUrl } = body;
+  const { name, description, picId, customerStartDate, customerTargetDate, picStartDate, picTargetDate, documentUrl, parentSubFaseId } = body;
 
   if (!name || !picId) {
     return Response.json({ error: "Name and PIC are required" }, { status: 400 });
@@ -33,6 +33,7 @@ export async function POST(
     data: {
       projectFaseId: faseId,
       projectId,
+      parentSubFaseId: parentSubFaseId || null,
       name,
       description: description || null,
       picId,
@@ -45,47 +46,11 @@ export async function POST(
     include: { pic: { select: USER_SELECT } },
   });
 
-  // Sync to Google Calendar if picTargetDate exists
-  if (picTargetDate) {
-    try {
-      const startIso = picStartDate || picTargetDate;
-      const gcalEventId = await createCalendarEvent({
-        summary: `[${project?.assNumber}] ${name}`,
-        description: `Project: ${project?.assName}\nPIC: ${pic?.name}\nPhase: ${fase.fase}${description ? `\n\n${description}` : ""}`,
-        startDate: startIso,
-        endDate: picTargetDate,
-        attendeeEmail: pic?.email ?? undefined,
-      });
-      if (gcalEventId) {
-        await db.subFase.update({ where: { id: subFase.id }, data: { gcalEventId } });
-        subFase.gcalEventId = gcalEventId;
-      }
-    } catch (e) {
-      console.error("GCal sync error (create):", e);
-      (subFase as Record<string, unknown>)._gcalError = e instanceof Error ? e.message : String(e);
-    }
-  }
+  // Google Calendar sync disabled (uses personal refresh token)
+  // if (picTargetDate) { ... createCalendarEvent ... }
 
-  // Send immediate email to PIC
-  try {
-    if (pic?.email) {
-      await sendSubFaseEmail({
-        to: pic.email,
-        picName: pic.name,
-        subFaseName: name,
-        projectCode: project?.assNumber ?? projectId,
-        projectName: project?.assName ?? "",
-        fase: fase.fase,
-        picStartDate: picStartDate ?? null,
-        picTargetDate: picTargetDate ?? null,
-        customerTargetDate: customerTargetDate ?? null,
-        documentUrl: documentUrl ?? null,
-        description: description ?? null,
-      });
-    }
-  } catch (e) {
-    console.error("Email send error:", e);
-  }
+  // Email notification disabled (uses personal Gmail token)
+  // if (pic?.email) { ... sendSubFaseEmail ... }
 
   try {
     await db.activityLog.create({

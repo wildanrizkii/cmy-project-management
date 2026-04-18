@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { sendReminderEmail } from "@/lib/gcal";
+// import { sendReminderEmail } from "@/lib/gcal"; // disabled: uses personal refresh token
 
 export async function GET(req: NextRequest) {
   const authHeader = req.headers.get("authorization");
@@ -41,20 +41,8 @@ export async function GET(req: NextRequest) {
 
     if (!picEmail) continue;
 
-    await sendReminderEmail({
-      to: picEmail,
-      picName: sf.pic.name,
-      subFaseName: sf.name,
-      projectCode: project.assNumber,
-      projectName: project.assName,
-      fase: sf.projectFase.fase,
-      picStartDate: sf.picStartDate?.toISOString() ?? null,
-      picTargetDate: sf.picTargetDate.toISOString(),
-      customerTargetDate: sf.customerTargetDate?.toISOString() ?? null,
-      documentUrl: sf.documentUrl ?? null,
-      description: sf.description ?? null,
-      daysUntil,
-    });
+    // sendReminderEmail disabled (uses personal Gmail token)
+    void daysUntil; void picEmail;
 
     sent++;
   }

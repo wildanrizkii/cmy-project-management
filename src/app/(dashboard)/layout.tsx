@@ -4,6 +4,7 @@ import { Sidebar } from "@/components/layout/sidebar";
 import { SidebarProvider } from "@/components/layout/sidebar-context";
 import { MainContent } from "@/components/layout/main-content";
 import { ToastProvider } from "@/components/layout/toast-context";
+import { LanguageProvider } from "@/contexts/language-context";
 
 export default async function DashboardLayout({
   children,
@@ -14,13 +15,15 @@ export default async function DashboardLayout({
   if (!session?.user) redirect("/login");
 
   return (
-    <SidebarProvider>
-      <ToastProvider>
-        <div className="min-h-screen bg-gray-50 flex">
-          <Sidebar />
-          <MainContent>{children}</MainContent>
-        </div>
-      </ToastProvider>
-    </SidebarProvider>
+    <LanguageProvider>
+      <SidebarProvider>
+        <ToastProvider>
+          <div className="min-h-screen bg-gray-50 flex">
+            <Sidebar />
+            <MainContent>{children}</MainContent>
+          </div>
+        </ToastProvider>
+      </SidebarProvider>
+    </LanguageProvider>
   );
 }

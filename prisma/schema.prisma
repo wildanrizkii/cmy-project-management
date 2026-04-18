@@ -74,11 +74,12 @@ model User {
   createdAt  DateTime    @default(now())
   updatedAt  DateTime    @updatedAt
 
-  projectsAsLeader Project[]     @relation("ProjectLeader")
-  subFasesAsPIC    SubFase[]     @relation("SubFasePIC")
-  activityLogs     ActivityLog[]
-  accounts         Account[]
-  sessions         Session[]
+  projectsAsLeader  Project[]       @relation("ProjectLeader")
+  subFasesAsPIC     SubFase[]       @relation("SubFasePIC")
+  activityLogs      ActivityLog[]
+  accounts          Account[]
+  sessions          Session[]
+  minuteMeetings    MinuteMeeting[] @relation("MinuteMeetingCreator")
 
   @@map("users")
 }
@@ -143,10 +144,13 @@ model Project {
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 
-  projectLeader User          @relation("ProjectLeader", fields: [projectLeaderId], references: [id])
-  fases         ProjectFase[]
-  hinanhyoDRs   HinanhyoDR[]
-  activityLogs  ActivityLog[]
+  projectLeader       User                        @relation("ProjectLeader", fields: [projectLeaderId], references: [id])
+  fases               ProjectFase[]
+  subFases            SubFase[]
+  hinanhyoDRs         HinanhyoDR[]
+  activityLogs        ActivityLog[]
+  scheduleRevisions   CustomerScheduleRevision[]
+  minuteMeetings      MinuteMeeting[]
 
   @@map("projects")
 }
@@ -171,6 +175,7 @@ model SubFase {
   id                 String    @id @default(cuid())
   projectFaseId      String
   projectId          String
+  parentSubFaseId    String?
   name               String
   description        String?   @db.Text
   picId              String
@@ -184,11 +189,32 @@ model SubFase {
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 
-  projectFase ProjectFase  @relation(fields: [projectFaseId], references: [id], onDelete: Cascade)
-  pic         User         @relation("SubFasePIC", fields: [picId], references: [id])
-  hinanhyoDRs HinanhyoDR[]
+  projectFase    ProjectFase  @relation(fields: [projectFaseId], references: [id], onDelete: Cascade)
+  project        Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  pic            User         @relation("SubFasePIC", fields: [picId], references: [id])
+  hinanhyoDRs    HinanhyoDR[]
+  parentSubFase  SubFase?     @relation("SubFaseChildren", fields: [parentSubFaseId], references: [id], onDelete: Cascade)
+  children       SubFase[]    @relation("SubFaseChildren")
 
   @@map("sub_fases")
+}
+
+model CustomerScheduleRevision {
+  id           String    @id @default(cuid())
+  projectId    String
+  revisionDate DateTime
+  rfqDate      DateTime?
+  dieGoDate    DateTime?
+  pp1Date      DateTime?
+  pp2Date      DateTime?
+  pp3Date      DateTime?
+  mpDate       DateTime?
+  notes        String?
+  createdAt    DateTime  @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("customer_schedule_revisions")
 }
 
 model HinanhyoDR {
@@ -221,3 +247,23 @@ model ActivityLog {
 
   @@map("activity_logs")
 }
+
+model MinuteMeeting {
+  id              String    @id @default(cuid())
+  recordingDate   DateTime
+  projectId       String?
+  informasiUntuk  String?
+  departemen      String?
+  deskripsi       String    @db.Text
+  followUpDate    DateTime?
+  isDone          Boolean   @default(false)
+  createdById     String
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  createdBy User     @relation("MinuteMeetingCreator", fields: [createdById], references: [id])
+
+  @@map("minute_meetings")
+}
+

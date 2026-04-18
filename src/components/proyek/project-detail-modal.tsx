@@ -1,11 +1,12 @@
 "use client";
 import { apiFetch } from "@/lib/fetch-client";
 
-import { useState, useRef, memo } from "react";
+import React, { useState, useEffect, useRef, memo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { X, Plus, Save, Loader2, Download, Check, Trash2, ChevronDown, ChevronRight, Edit2, ExternalLink, CheckCircle2 } from "lucide-react";
+import { X, Plus, Save, Loader2, Download, Check, Trash2, ChevronDown, ChevronRight, Edit2, ExternalLink, CheckCircle2, Info, Layers, AlertTriangle, Users, Timer, CalendarDays, FileText, Activity } from "lucide-react";
 import * as XLSX from "xlsx";
 import { useToast } from "@/components/layout/toast-context";
+import { useLanguage } from "@/contexts/language-context";
 import {
   formatDate,
   formatDateTime,
@@ -30,9 +31,10 @@ interface Props {
   project: Project;
   onClose: () => void;
   onUpdate: (p: Project) => void;
+  initialTab?: Tab;
 }
 
-type Tab = "info" | "phases" | "hinanhyo" | "mp" | "ct" | "activity";
+type Tab = "info" | "phases" | "hinanhyo" | "mp" | "ct" | "schedule" | "meeting" | "activity";
 
 const CUSTOMER_OPTIONS: { value: Customer; label: string }[] = [
   { value: "AHM", label: "AHM" },
@@ -45,12 +47,17 @@ const CUSTOMER_OPTIONS: { value: Customer; label: string }[] = [
   { value: "AJI", label: "AJI" },
 ];
 
-export function ProjectDetailModal({ project, onClose, onUpdate }: Props) {
+export function ProjectDetailModal({ project, onClose, onUpdate, initialTab }: Props) {
   const { toast } = useToast();
+  const { t } = useLanguage();
   const queryClient = useQueryClient();
-  const [tab, setTab] = useState<Tab>("info");
-  const [mountedTabs, setMountedTabs] = useState<Set<Tab>>(new Set(["info"]));
+  const [tab, setTab] = useState<Tab>(initialTab ?? "info");
+  const [mountedTabs, setMountedTabs] = useState<Set<Tab>>(new Set([initialTab ?? "info"]));
   const changeTab = (t: Tab) => { setTab(t); setMountedTabs((prev) => new Set([...prev, t])); };
+  const tabScrollRef = useRef<HTMLDivElement>(null);
+  const scrollTabs = (dir: "left" | "right") => {
+    if (tabScrollRef.current) tabScrollRef.current.scrollBy({ left: dir === "left" ? -120 : 120, behavior: "smooth" });
+  };
 
   // Fetch full project detail
   const { data: detail, refetch } = useQuery<Project>({
@@ -118,13 +125,15 @@ export function ProjectDetailModal({ project, onClose, onUpdate }: Props) {
     XLSX.writeFile(wb, `${d.assNumber}-${d.assName.replace(/\s+/g, "-")}.xlsx`);
   };
 
-  const tabs: { id: Tab; label: string }[] = [
-    { id: "info", label: "General Info" },
-    { id: "phases", label: "Phases & SubPhases" },
-    { id: "hinanhyo", label: "Hinanhyo / DR" },
-    { id: "mp", label: "Manpower" },
-    { id: "ct", label: "Cycle Time" },
-    { id: "activity", label: "Activity Log" },
+  const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
+    { id: "info", label: t.modal.tabs.info, icon: <Info className="w-3.5 h-3.5" /> },
+    { id: "phases", label: t.modal.tabs.phases, icon: <Layers className="w-3.5 h-3.5" /> },
+    { id: "hinanhyo", label: t.modal.tabs.hinanhyo, icon: <AlertTriangle className="w-3.5 h-3.5" /> },
+    { id: "mp", label: t.modal.tabs.mp, icon: <Users className="w-3.5 h-3.5" /> },
+    { id: "ct", label: t.modal.tabs.ct, icon: <Timer className="w-3.5 h-3.5" /> },
+    { id: "schedule", label: t.modal.tabs.schedule, icon: <CalendarDays className="w-3.5 h-3.5" /> },
+    { id: "meeting", label: t.modal.tabs.meeting, icon: <FileText className="w-3.5 h-3.5" /> },
+    { id: "activity", label: t.modal.tabs.activity, icon: <Activity className="w-3.5 h-3.5" /> },
   ];
 
   const overallProgress = computeProjectProgress(detail.fases ?? []);
@@ -174,19 +183,38 @@ export function ProjectDetailModal({ project, onClose, onUpdate }: Props) {
         </div>
 
         {/* Tabs */}
-        <div className="flex border-b border-gray-100 px-6 overflow-x-auto">
-          {tabs.map((t) => (
-            <button
-              key={t.id}
-              onClick={() => changeTab(t.id)}
-              className={`px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${tab === t.id
-                ? "border-blue-600 text-blue-600"
-                : "border-transparent text-gray-500 hover:text-gray-800"
-                }`}
-            >
-              {t.label}
-            </button>
-          ))}
+        <div className="relative flex items-end border-b border-gray-100 bg-gray-50/60">
+          <button
+            onClick={() => scrollTabs("left")}
+            className="shrink-0 px-1.5 pb-2 text-gray-400 hover:text-gray-600 transition-colors"
+          >
+            <ChevronDown className="w-3.5 h-3.5 rotate-90" />
+          </button>
+          <div
+            ref={tabScrollRef}
+            className="flex gap-1 pt-2 overflow-x-auto flex-1"
+            style={{ scrollbarWidth: "none" }}
+          >
+            {tabs.map((t) => (
+              <button
+                key={t.id}
+                onClick={() => changeTab(t.id)}
+                className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium whitespace-nowrap rounded-t-lg transition-all border-b-2 ${tab === t.id
+                  ? "border-blue-600 text-blue-600 bg-white shadow-sm"
+                  : "border-transparent text-gray-500 hover:text-gray-700 hover:bg-white/70"
+                  }`}
+              >
+                {t.icon}
+                {t.label}
+              </button>
+            ))}
+          </div>
+          <button
+            onClick={() => scrollTabs("right")}
+            className="shrink-0 px-1.5 pb-2 text-gray-400 hover:text-gray-600 transition-colors"
+          >
+            <ChevronDown className="w-3.5 h-3.5 -rotate-90" />
+          </button>
         </div>
 
         {/* Content - tabs are lazy-mounted: only rendered on first visit, then kept alive with hidden */}
@@ -196,6 +224,8 @@ export function ProjectDetailModal({ project, onClose, onUpdate }: Props) {
           <div className={tab !== "hinanhyo" ? "hidden" : ""}>{mountedTabs.has("hinanhyo") && <HinanhyoTab detail={detail} toast={toast} refetch={refetch} />}</div>
           <div className={tab !== "mp" ? "hidden" : ""}>{mountedTabs.has("mp") && <ManpowerTab detail={detail} onUpdate={onUpdate} toast={toast} refetch={refetch} />}</div>
           <div className={tab !== "ct" ? "hidden" : ""}>{mountedTabs.has("ct") && <CycleTimeTab detail={detail} onUpdate={onUpdate} toast={toast} refetch={refetch} />}</div>
+          <div className={tab !== "schedule" ? "hidden" : ""}>{mountedTabs.has("schedule") && <ScheduleTab detail={detail} toast={toast} />}</div>
+          <div className={tab !== "meeting" ? "hidden" : ""}>{mountedTabs.has("meeting") && <MinutesMeetingTab detail={detail} toast={toast} />}</div>
           <div className={tab !== "activity" ? "hidden" : ""}>{mountedTabs.has("activity") && <ActivityTab detail={detail} />}</div>
         </div>
       </div>
@@ -216,6 +246,7 @@ function InfoTab({ detail, users, onUpdate, toast, refetch }: {
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
     model: detail.model,
+    assNumber: detail.assNumber,
     assName: detail.assName,
     customer: detail.customer,
     description: detail.description ?? "",
@@ -357,6 +388,11 @@ function InfoTab({ detail, users, onUpdate, toast, refetch }: {
           <label className="block text-xs font-semibold text-gray-600 mb-1">Model</label>
           <input value={form.model} onChange={(e) => setForm({ ...form, model: e.target.value })}
             className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        </div>
+        <div>
+          <label className="block text-xs font-semibold text-gray-600 mb-1">Assy Number</label>
+          <input value={form.assNumber} onChange={(e) => setForm({ ...form, assNumber: e.target.value })}
+            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono" />
         </div>
         <div>
           <label className="block text-xs font-semibold text-gray-600 mb-1">Assy Name</label>
@@ -721,6 +757,73 @@ function FaseSection({ fase, users, projectId, toast, refetch }: {
   );
 }
 
+function AddSubFaseInlineForm({ projectId, faseId, parentSubFaseId, users, toast, refetch, onClose }: {
+  projectId: string;
+  faseId: string;
+  parentSubFaseId: string;
+  users: User[];
+  toast: (type: "success" | "error", msg: string) => void;
+  refetch: () => void;
+  onClose: () => void;
+}) {
+  const [form, setForm] = useState({ name: "", picId: "", picStartDate: "", picTargetDate: "", customerStartDate: "", customerTargetDate: "" });
+  const [saving, setSaving] = useState(false);
+
+  const add = async () => {
+    if (!form.name || !form.picId) { toast("error", "Name and PIC are required"); return; }
+    setSaving(true);
+    const res = await apiFetch(`/api/projects/${projectId}/fases/${faseId}/subfases`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...form, parentSubFaseId }),
+    });
+    const data = await res.json();
+    setSaving(false);
+    if (!res.ok) { toast("error", data.error ?? "Failed to add"); return; }
+    toast("success", "Sub-Subphase added");
+    onClose();
+    refetch();
+  };
+
+  return (
+    <div className="bg-gray-50 rounded-lg border border-dashed border-gray-300 p-3 space-y-2">
+      <p className="text-xs font-bold text-gray-600">New Sub-Subphase</p>
+      <div className="grid grid-cols-2 gap-2">
+        <div className="col-span-2">
+          <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}
+            placeholder="Sub-subphase name *"
+            className="w-full border border-gray-200 rounded px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500" />
+        </div>
+        <div className="col-span-2">
+          <select value={form.picId} onChange={(e) => setForm({ ...form, picId: e.target.value })}
+            className="w-full border border-gray-200 rounded px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500">
+            <option value="">Select PIC *</option>
+            {users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+          </select>
+        </div>
+        <div>
+          <input type="date" value={form.picStartDate} onChange={(e) => setForm({ ...form, picStartDate: e.target.value })}
+            placeholder="PIC Start"
+            className="w-full border border-gray-200 rounded px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500" />
+        </div>
+        <div>
+          <input type="date" value={form.picTargetDate} onChange={(e) => setForm({ ...form, picTargetDate: e.target.value })}
+            placeholder="PIC Target"
+            className="w-full border border-gray-200 rounded px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500" />
+        </div>
+      </div>
+      <div className="flex gap-2">
+        <button onClick={add} disabled={saving}
+          className="flex items-center gap-1 px-2.5 py-1.5 bg-blue-600 text-white rounded text-xs font-medium disabled:opacity-50">
+          {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}
+          Add
+        </button>
+        <button onClick={onClose} className="px-2.5 py-1.5 border border-gray-200 rounded text-xs text-gray-600">Cancel</button>
+      </div>
+    </div>
+  );
+}
+
 function patchProjectCache(
   queryClient: ReturnType<typeof useQueryClient>,
   projectId: string,
@@ -750,6 +853,19 @@ const SubFaseRow = memo(function SubFaseRow({ subFase, users, toast, refetch }: 
   const [localIsDone, setLocalIsDone] = useState(subFase.isDone);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [showChildForm, setShowChildForm] = useState(false);
+  const [highlighted, setHighlighted] = useState(false);
+  const rowRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const hlId = sessionStorage.getItem("highlightSubFaseId");
+    if (hlId === subFase.id) {
+      sessionStorage.removeItem("highlightSubFaseId");
+      setHighlighted(true);
+      rowRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      setTimeout(() => setHighlighted(false), 2500);
+    }
+  }, [subFase.id]);
   const [editForm, setEditForm] = useState({
     name: subFase.name,
     picId: subFase.picId,
@@ -903,39 +1019,70 @@ const SubFaseRow = memo(function SubFaseRow({ subFase, users, toast, refetch }: 
   }
 
   return (
-    <div className={`flex items-start gap-3 bg-white rounded-lg border px-3 py-2.5 ${localIsDone ? "border-green-200 opacity-75" : "border-gray-200"}`}>
-      <button
-        onClick={toggle}
-        className={`mt-0.5 w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 transition-colors ${localIsDone ? "bg-green-500 border-green-500" : "border-gray-300 hover:border-blue-400"
-          }`}
-      >
-        {localIsDone && <Check className="w-3 h-3 text-white" />}
-      </button>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <span className={`w-2 h-2 rounded-full shrink-0 ${statusDot}`} />
-          <p className={`text-sm font-medium ${localIsDone ? "line-through text-gray-400" : "text-gray-900"}`}>{subFase.name}</p>
-          {subFase.documentUrl && (
-            <a href={subFase.documentUrl} target="_blank" rel="noopener noreferrer"
-              className="text-blue-500 hover:text-blue-700" title="Open document">
-              <ExternalLink className="w-3 h-3" />
-            </a>
+    <div className="space-y-1.5">
+      <div ref={rowRef} className={`flex items-start gap-3 rounded-lg border px-3 py-2.5 transition-colors duration-700 ${highlighted ? "bg-yellow-50 border-yellow-400" : localIsDone ? "bg-white border-green-200 opacity-75" : "bg-white border-gray-200"}`}>
+        <button
+          onClick={toggle}
+          className={`mt-0.5 w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 transition-colors ${localIsDone ? "bg-green-500 border-green-500" : "border-gray-300 hover:border-blue-400"}`}
+        >
+          {localIsDone && <Check className="w-3 h-3 text-white" />}
+        </button>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <span className={`w-2 h-2 rounded-full shrink-0 ${statusDot}`} />
+            <p className={`text-sm font-medium ${localIsDone ? "line-through text-gray-400" : "text-gray-900"}`}>{subFase.name}</p>
+            {subFase.documentUrl && (
+              <a href={subFase.documentUrl} target="_blank" rel="noopener noreferrer"
+                className="text-blue-500 hover:text-blue-700" title="Open document">
+                <ExternalLink className="w-3 h-3" />
+              </a>
+            )}
+          </div>
+          <div className="flex items-center gap-3 mt-0.5 text-xs text-gray-500 flex-wrap">
+            <span>PIC: <span className="font-medium">{subFase.pic?.name ?? "-"}</span></span>
+            {subFase.picTargetDate && <span>PIC Target: {formatDate(subFase.picTargetDate)}</span>}
+            {subFase.customerTargetDate && <span>Cust Target: {formatDate(subFase.customerTargetDate)}</span>}
+          </div>
+        </div>
+        <div className="flex items-center gap-0.5 shrink-0">
+          <button onClick={() => setEditing(true)} className="p-1 text-blue-500 hover:text-blue-600 rounded transition-colors">
+            <Edit2 className="w-3.5 h-3.5" />
+          </button>
+          <button onClick={del} className="p-1 text-red-500 hover:text-red-600 rounded transition-colors">
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </div>
+
+      {/* Children (sub-subphases) */}
+      {((subFase.children ?? []).length > 0 || showChildForm) && (
+        <div className="ml-8 space-y-1.5 border-l-2 border-gray-200 pl-3">
+          {(subFase.children ?? []).map((child) => (
+            <SubFaseRow key={child.id} subFase={child} users={users} toast={toast} refetch={refetch} />
+          ))}
+          {showChildForm && (
+            <AddSubFaseInlineForm
+              projectId={subFase.projectId}
+              faseId={subFase.projectFaseId}
+              parentSubFaseId={subFase.id}
+              users={users}
+              toast={toast}
+              refetch={refetch}
+              onClose={() => setShowChildForm(false)}
+            />
           )}
         </div>
-        <div className="flex items-center gap-3 mt-0.5 text-xs text-gray-500 flex-wrap">
-          <span>PIC: <span className="font-medium">{subFase.pic?.name ?? "-"}</span></span>
-          {subFase.picTargetDate && <span>PIC Target: {formatDate(subFase.picTargetDate)}</span>}
-          {subFase.customerTargetDate && <span>Cust Target: {formatDate(subFase.customerTargetDate)}</span>}
-        </div>
-      </div>
-      <div className="flex items-center gap-0.5 shrink-0">
-        <button onClick={() => setEditing(true)} className="p-1 text-blue-500 hover:text-blue-600 rounded transition-colors">
-          <Edit2 className="w-3.5 h-3.5" />
+      )}
+
+      {/* Add sub-subphase button */}
+      {!showChildForm && (
+        <button
+          onClick={() => setShowChildForm(true)}
+          className="ml-8 flex items-center gap-1 text-xs text-gray-400 hover:text-blue-600 transition-colors px-1"
+        >
+          <Plus className="w-3 h-3" /> Add Sub-Subphase
         </button>
-        <button onClick={del} className="p-1 text-red-500 hover:text-red-600 rounded transition-colors">
-          <Trash2 className="w-3.5 h-3.5" />
-        </button>
-      </div>
+      )}
     </div>
   );
 });
@@ -1475,6 +1622,384 @@ function CycleTimeTab({ detail, onUpdate, toast, refetch }: {
           </>
         )}
       </div>
+    </div>
+  );
+}
+
+// ─── Schedule Customer Tab ────────────────────────────────────────────────────
+
+type ScheduleRevision = {
+  id: string;
+  revisionDate: string;
+  rfqDate: string | null;
+  dieGoDate: string | null;
+  pp1Date: string | null;
+  pp2Date: string | null;
+  pp3Date: string | null;
+  mpDate: string | null;
+  notes: string | null;
+};
+
+const SCHEDULE_MILESTONES = [
+  { key: "rfqDate", label: "RFQ" },
+  { key: "dieGoDate", label: "DIEGO" },
+  { key: "pp1Date", label: "PP1" },
+  { key: "pp2Date", label: "PP2" },
+  { key: "pp3Date", label: "PP3" },
+  { key: "mpDate", label: "MP" },
+] as const;
+
+function fmtScheduleDate(d: string | null) {
+  if (!d) return "-";
+  return new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "2-digit" });
+}
+
+function isScheduleChanged(rev: ScheduleRevision, prev: ScheduleRevision | null, key: string): boolean {
+  if (!prev) return false;
+  const a = (rev as Record<string, unknown>)[key] ? new Date((rev as Record<string, unknown>)[key] as string).toDateString() : null;
+  const b = (prev as Record<string, unknown>)[key] ? new Date((prev as Record<string, unknown>)[key] as string).toDateString() : null;
+  return a !== b;
+}
+
+function ScheduleTab({ detail, toast }: {
+  detail: Project;
+  toast: (type: "success" | "error", msg: string) => void;
+}) {
+  const { t } = useLanguage();
+  const sc = t.modal.schedule;
+  const { data: revisions = [], refetch } = useQuery<ScheduleRevision[]>({
+    queryKey: ["schedule", detail.id],
+    queryFn: () => apiFetch(`/api/projects/${detail.id}/schedule`).then((r) => r.json()),
+  });
+
+  const [showForm, setShowForm] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const emptyForm = { revisionDate: "", rfqDate: "", dieGoDate: "", pp1Date: "", pp2Date: "", pp3Date: "", mpDate: "", notes: "" };
+  const [form, setForm] = useState(emptyForm);
+
+  const add = async () => {
+    if (!form.revisionDate) { toast("error", sc.toastValidation); return; }
+    if (revisions.length > 0) {
+      const latest = revisions[revisions.length - 1];
+      if (new Date(form.revisionDate) < new Date(latest.revisionDate)) {
+        toast("error", `${sc.toastDateOrder} (${fmtScheduleDate(latest.revisionDate)})`);
+        return;
+      }
+      if (form.revisionDate === latest.revisionDate.slice(0, 10)) {
+        toast("error", sc.toastDuplicate);
+        return;
+      }
+    }
+    setSaving(true);
+    const res = await apiFetch(`/api/projects/${detail.id}/schedule`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(form),
+    });
+    const data = await res.json();
+    setSaving(false);
+    if (!res.ok) { toast("error", data.error ?? sc.toastSaveError); return; }
+    toast("success", sc.toastAdded);
+    setForm(emptyForm);
+    setShowForm(false);
+    refetch();
+  };
+
+  const del = async (id: string) => {
+    if (!confirm(sc.confirmDelete)) return;
+    const res = await apiFetch(`/api/projects/${detail.id}/schedule?revisionId=${id}`, { method: "DELETE" });
+    if (!res.ok) { toast("error", sc.toastDeleteError); return; }
+    toast("success", sc.toastDeleted);
+    refetch();
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h3 className="font-semibold text-gray-800">{sc.title}</h3>
+        <button onClick={() => setShowForm(!showForm)}
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-medium">
+          <Plus className="w-3.5 h-3.5" /> {sc.addRevision}
+        </button>
+      </div>
+
+      {showForm && (
+        <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4 space-y-3">
+          <p className="text-xs font-bold text-indigo-800">{sc.formTitle}</p>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="col-span-2">
+              <label className="block text-xs font-medium text-gray-600 mb-1">{sc.formDate}</label>
+              <input type="date" value={form.revisionDate} onChange={(e) => setForm({ ...form, revisionDate: e.target.value })}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+            </div>
+            {SCHEDULE_MILESTONES.map((m) => (
+              <div key={m.key}>
+                <label className="block text-xs font-medium text-gray-600 mb-1">{m.label} Date</label>
+                <input type="date" value={(form as Record<string, string>)[m.key]} onChange={(e) => setForm({ ...form, [m.key]: e.target.value })}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+              </div>
+            ))}
+            <div className="col-span-2">
+              <label className="block text-xs font-medium text-gray-600 mb-1">{sc.formNotes}</label>
+              <input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })}
+                placeholder={sc.formNotesPh}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={add} disabled={saving}
+              className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 text-white rounded-lg text-xs font-medium disabled:opacity-50">
+              {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+              {sc.save}
+            </button>
+            <button onClick={() => setShowForm(false)} className="px-4 py-2 border border-gray-200 rounded-lg text-xs text-gray-600">{sc.cancel}</button>
+          </div>
+        </div>
+      )}
+
+      {revisions.length === 0 ? (
+        <div className="py-12 text-center text-gray-400 bg-gray-50 rounded-xl">
+          <p className="text-sm">{sc.noData}</p>
+          <p className="text-xs mt-1">{sc.noDataSub}</p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {revisions.map((rev, i) => {
+            const prev = i > 0 ? revisions[i - 1] : null;
+            return (
+              <div key={rev.id} className="border border-gray-200 rounded-2xl p-5 bg-white shadow-sm">
+                <div className="flex items-center justify-between mb-1">
+                  <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">
+                    Revisi &nbsp;
+                    <span className="text-blue-700 text-sm normal-case tracking-normal">
+                      {new Date(rev.revisionDate).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "2-digit" })}
+                    </span>
+                  </p>
+                  <button onClick={() => del(rev.id)} className="p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                {/* Timeline */}
+                <div className="mt-4 mb-1">
+                  {/* Line + dots */}
+                  <div className="relative h-7 flex items-center">
+                    {/* Horizontal line through center */}
+                    <div className="absolute inset-x-0 top-1/2 h-[3px] bg-gray-300 -translate-y-1/2 rounded-full" />
+                    {/* Dots */}
+                    {SCHEDULE_MILESTONES.map((m) => (
+                      <div key={m.key} className="flex-1 flex justify-center relative z-10">
+                        <div className="w-7 h-7 rounded-full bg-yellow-400 border-[3px] border-yellow-600 shadow" />
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Labels + dates below dots */}
+                  <div className="flex mt-2">
+                    {SCHEDULE_MILESTONES.map((m) => {
+                      const changed = isScheduleChanged(rev, prev, m.key);
+                      const val = (rev as Record<string, unknown>)[m.key] as string | null;
+                      return (
+                        <div key={m.key} className="flex-1 text-center">
+                          <p className="text-[11px] font-bold text-gray-700">{m.label}</p>
+                          <p className={`text-[10px] mt-0.5 leading-tight whitespace-nowrap ${changed ? "text-blue-600 font-semibold" : "text-gray-500"}`}>
+                            {fmtScheduleDate(val)}
+                          </p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {rev.notes && (
+                  <p className="text-xs text-gray-400 mt-3 italic">{rev.notes}</p>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {revisions.length > 0 && (
+        <p className="text-[10px] text-gray-400">
+          <span className="text-blue-600 font-semibold">Blue</span> {sc.legend}
+        </p>
+      )}
+    </div>
+  );
+}
+
+// ─── Minutes Meeting Tab ──────────────────────────────────────────────────────
+
+type MeetingNote = {
+  id: string;
+  recordingDate: string;
+  informasiUntuk: string | null;
+  departemen: string | null;
+  deskripsi: string;
+  followUpDate: string | null;
+  isDone: boolean;
+  createdAt: string;
+  createdBy: { id: string; name: string };
+};
+
+function MinutesMeetingTab({ detail, toast }: {
+  detail: Project;
+  toast: (type: "success" | "error", msg: string) => void;
+}) {
+  const { t } = useLanguage();
+  const mt = t.modal.meeting;
+  const queryClient = useQueryClient();
+  const { data: notes = [], refetch } = useQuery<MeetingNote[]>({
+    queryKey: ["meeting-notes", detail.id],
+    queryFn: () => apiFetch(`/api/minutes-meeting?projectId=${detail.id}`).then((r) => r.json()),
+  });
+
+  const [showForm, setShowForm] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const emptyForm = {
+    recordingDate: new Date().toISOString().slice(0, 10),
+    informasiUntuk: "",
+    departemen: "",
+    deskripsi: "",
+    followUpDate: "",
+  };
+  const [form, setForm] = useState(emptyForm);
+
+  const add = async () => {
+    if (!form.recordingDate || !form.deskripsi) { toast("error", mt.toastValidation); return; }
+    setSaving(true);
+    const res = await apiFetch("/api/minutes-meeting", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...form, projectId: detail.id }),
+    });
+    setSaving(false);
+    if (!res.ok) { toast("error", mt.toastSaveError); return; }
+    toast("success", mt.toastSaved);
+    setForm(emptyForm);
+    setShowForm(false);
+    refetch();
+  };
+
+  const toggleDone = async (note: MeetingNote) => {
+    queryClient.setQueryData<MeetingNote[]>(["meeting-notes", detail.id], (old) =>
+      old?.map((n) => n.id === note.id ? { ...n, isDone: !n.isDone } : n) ?? []
+    );
+    const res = await apiFetch(`/api/minutes-meeting/${note.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ isDone: !note.isDone }),
+    });
+    if (!res.ok) { queryClient.invalidateQueries({ queryKey: ["meeting-notes", detail.id] }); toast("error", mt.toastStatusError); }
+  };
+
+  const del = async (id: string) => {
+    if (!confirm(mt.confirmDelete)) return;
+    queryClient.setQueryData<MeetingNote[]>(["meeting-notes", detail.id], (old) =>
+      old?.filter((n) => n.id !== id) ?? []
+    );
+    const res = await apiFetch(`/api/minutes-meeting/${id}`, { method: "DELETE" });
+    if (!res.ok) { queryClient.invalidateQueries({ queryKey: ["meeting-notes", detail.id] }); toast("error", mt.toastDeleteError); }
+    else toast("success", mt.toastDeleted);
+  };
+
+  const pending = notes.filter((n) => !n.isDone).length;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="font-semibold text-gray-800">{mt.heading}</h3>
+          {pending > 0 && <p className="text-xs text-amber-600 mt-0.5">{pending} {mt.pendingWarning}</p>}
+        </div>
+        <button
+          onClick={() => setShowForm(!showForm)}
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-medium hover:bg-blue-700"
+        >
+          <Plus className="w-3.5 h-3.5" /> {mt.addBtn}
+        </button>
+      </div>
+
+      {showForm && (
+        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-3">
+          <p className="text-xs font-bold text-blue-800">{mt.formTitle}</p>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">{mt.formDate}</label>
+              <input type="date" value={form.recordingDate} onChange={(e) => setForm({ ...form, recordingDate: e.target.value })}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">{mt.formFollowUp}</label>
+              <input type="date" value={form.followUpDate} onChange={(e) => setForm({ ...form, followUpDate: e.target.value })}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">{mt.formInfoFor}</label>
+              <input value={form.informasiUntuk} onChange={(e) => setForm({ ...form, informasiUntuk: e.target.value })}
+                placeholder={mt.formInfoForPh} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">{mt.formDept}</label>
+              <input value={form.departemen} onChange={(e) => setForm({ ...form, departemen: e.target.value })}
+                placeholder={mt.formDeptPh} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+            <div className="col-span-2">
+              <label className="block text-xs font-medium text-gray-600 mb-1">{mt.formDesc}</label>
+              <textarea value={form.deskripsi} onChange={(e) => setForm({ ...form, deskripsi: e.target.value })}
+                placeholder={mt.formDescPh} rows={3}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={add} disabled={saving}
+              className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-lg text-xs font-medium disabled:opacity-50">
+              {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+              {mt.save}
+            </button>
+            <button onClick={() => setShowForm(false)} className="px-4 py-2 border border-gray-200 rounded-lg text-xs text-gray-600">{mt.cancel}</button>
+          </div>
+        </div>
+      )}
+
+      {notes.length === 0 ? (
+        <div className="py-10 text-center text-gray-400 bg-gray-50 rounded-xl">
+          <p className="text-sm">{mt.noData}</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {notes.map((note) => (
+            <div key={note.id} className={`rounded-xl border p-3.5 transition-colors ${note.isDone ? "bg-gray-50 border-gray-100 opacity-70" : "bg-white border-gray-200"}`}>
+              <div className="flex items-start gap-3">
+                <button onClick={() => toggleDone(note)}
+                  className={`mt-0.5 w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 transition-colors ${note.isDone ? "bg-green-500 border-green-500" : "border-gray-300 hover:border-green-400"}`}>
+                  {note.isDone && <Check className="w-2.5 h-2.5 text-white" />}
+                </button>
+                <div className="flex-1 min-w-0">
+                  <p className={`text-sm leading-snug ${note.isDone ? "line-through text-gray-400" : "text-gray-800"}`}>{note.deskripsi}</p>
+                  <div className="flex items-center gap-3 mt-1 text-xs text-gray-400 flex-wrap">
+                    <span>{formatDate(note.recordingDate)}</span>
+                    {note.informasiUntuk && <span>{mt.infoFor} <span className="text-gray-600">{note.informasiUntuk}</span></span>}
+                    {note.followUpDate && (
+                      <span className={new Date(note.followUpDate) < new Date() && !note.isDone ? "text-red-500 font-medium" : ""}>
+                        {mt.followUp} {formatDate(note.followUpDate)}
+                      </span>
+                    )}
+                    <span>{mt.by} {note.createdBy.name}</span>
+                  </div>
+                </div>
+                <button onClick={() => del(note.id)} className="p-1 text-red-400 hover:text-red-600 rounded transition-colors shrink-0">
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      <p className="text-[10px] text-gray-400">
+        {mt.editLink} <a href="/minutes-meeting" className="underline text-blue-500">{mt.editLinkLabel}</a>.
+      </p>
     </div>
   );
 }

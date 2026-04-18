@@ -31,7 +31,9 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { STATUS_LABELS, FASE_LABELS } from "@/types";
+import { useLanguage } from "@/contexts/language-context";
 import { CycleTimeChart } from "@/components/cycletime";
+import { ScheduleCustomerChart } from "@/components/dashboard/schedule-customer-chart";
 
 const STATUS_COLORS: Record<string, string> = {
   BELUM_MULAI: "#94a3b8",
@@ -76,41 +78,6 @@ function ProjectListTooltip(props: AnyTooltipProps & { labelKey: string; countKe
   );
 }
 
-function HinanhyoTooltip(props: AnyTooltipProps) {
-  const { active, payload } = props;
-  if (!active || !payload?.length) return null;
-  const d = payload[0]?.payload as {
-    code: string; name: string;
-    DITERIMA: number; DITOLAK: number; PENDING: number; total: number;
-  };
-  return (
-    <div className="bg-white border border-gray-200 shadow-xl rounded-xl p-3 text-xs max-w-52">
-      <p className="font-semibold text-gray-900 mb-1.5 truncate">
-        <span className="font-mono">{d.code}</span> - {d.name}
-      </p>
-      <div className="space-y-1">
-        <p className="flex items-center justify-between gap-4">
-          <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-green-500 inline-block" />Accepted</span>
-          <span className="font-semibold text-green-700">{d.DITERIMA}</span>
-        </p>
-        <p className="flex items-center justify-between gap-4">
-          <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-red-500 inline-block" />Rejected</span>
-          <span className="font-semibold text-red-700">{d.DITOLAK}</span>
-        </p>
-        <p className="flex items-center justify-between gap-4">
-          <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-yellow-400 inline-block" />Pending</span>
-          <span className="font-semibold text-yellow-700">{d.PENDING}</span>
-        </p>
-        <div className="border-t border-gray-100 pt-1 mt-1">
-          <p className="flex items-center justify-between gap-4">
-            <span className="text-gray-500">Total</span>
-            <span className="font-bold text-gray-800">{d.total}</span>
-          </p>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 function StatusPieTooltip(props: AnyTooltipProps) {
   const { active, payload } = props;
@@ -130,26 +97,6 @@ function StatusPieTooltip(props: AnyTooltipProps) {
         ))}
       </div>
     </div>
-  );
-}
-
-// Label on top of stacked bar showing total
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function HinanhyoTotalLabel(props: any) {
-  const { x, y, width, payload } = props;
-  const total = (payload as { total: number })?.total;
-  if (!total) return null;
-  return (
-    <text
-      x={x + width / 2}
-      y={y - 4}
-      textAnchor="middle"
-      fontSize={11}
-      fontWeight="bold"
-      fill="#92400e"
-    >
-      {total}
-    </text>
   );
 }
 
@@ -175,6 +122,8 @@ function PieCountLabel({
 
 // ─── Clock - isolated so it doesn't trigger chart re-renders ─────────────────
 function ClockDisplay() {
+  const { lang } = useLanguage();
+  const locale = lang === "id" ? "id-ID" : "en-GB";
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 1000);
@@ -184,11 +133,11 @@ function ClockDisplay() {
     <div className="flex items-center gap-3 bg-white border border-gray-100 shadow-sm rounded-xl px-4 py-2.5 self-start sm:self-auto">
       <Calendar className="w-4 h-4 text-gray-400 shrink-0" />
       <span className="text-sm text-gray-600 hidden sm:block">
-        {now.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+        {now.toLocaleDateString(locale, { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
       </span>
       <span className="text-gray-300 text-sm hidden sm:block">|</span>
       <span className="font-mono text-blue-600 font-semibold tabular-nums text-sm tracking-wider">
-        {now.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+        {now.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
       </span>
     </div>
   );
@@ -196,12 +145,16 @@ function ClockDisplay() {
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function DashboardPage() {
+  const { t } = useLanguage();
+  const db = t.dashboard;
+  const sl = t.statusLabels;
   const [monitorPage, setMonitorPage] = useState(1);
   const monitorPerPage = 8;
 
   const [filterLeaderId, setFilterLeaderId] = useState("");
   const [filterCustomer, setFilterCustomer] = useState("");
   const [filterProjectId, setFilterProjectId] = useState("");
+  const [ctSelectedId, setCtSelectedId] = useState<string>("");
 
   const hasFilter = filterLeaderId || filterCustomer || filterProjectId;
 
@@ -228,18 +181,18 @@ export default function DashboardPage() {
 
   // ─── KPI cards ──────────────────────────────────────────────────────────────
   const kpiCards = [
-    { label: "Active Projects", value: kpi.totalAktif ?? 0, icon: Activity, bg: "bg-blue-50", text: "text-blue-700" },
-    { label: "Overdue Projects", value: kpi.totalTerlambat ?? 0, icon: AlertTriangle, bg: "bg-red-50", text: "text-red-700" },
-    { label: "Hinanhyo Pending", value: kpi.totalHinanhyoPending ?? 0, icon: AlertCircle, bg: "bg-orange-50", text: "text-orange-700" },
-    { label: "Avg. Progress", value: `${kpi.rataRataProgress ?? 0}%`, icon: TrendingUp, bg: "bg-green-50", text: "text-green-700" },
-    { label: "Completed This Month", value: kpi.selesaiBulanIni ?? 0, icon: CheckCircle2, bg: "bg-emerald-50", text: "text-emerald-700" },
-    { label: "Deadline in 7 Days", value: kpi.deadline7Hari ?? 0, icon: Clock, bg: "bg-yellow-50", text: "text-yellow-700" },
+    { label: db.kpiActive, value: kpi.totalAktif ?? 0, icon: Activity, bg: "bg-blue-50", text: "text-blue-700" },
+    { label: db.kpiOverdue, value: kpi.totalTerlambat ?? 0, icon: AlertTriangle, bg: "bg-red-50", text: "text-red-700" },
+    { label: db.kpiHinanhyo, value: kpi.totalHinanhyoPending ?? 0, icon: AlertCircle, bg: "bg-orange-50", text: "text-orange-700" },
+    { label: db.kpiAvgProgress, value: `${kpi.rataRataProgress ?? 0}%`, icon: TrendingUp, bg: "bg-green-50", text: "text-green-700" },
+    { label: db.kpiCompletedMonth, value: kpi.selesaiBulanIni ?? 0, icon: CheckCircle2, bg: "bg-emerald-50", text: "text-emerald-700" },
+    { label: db.kpiDeadline7, value: kpi.deadline7Hari ?? 0, icon: Clock, bg: "bg-yellow-50", text: "text-yellow-700" },
   ];
 
   // ─── Chart data ──────────────────────────────────────────────────────────────
   const statusChartData = (charts.statusDist ?? []).map(
     (d: { status: string; count: number; projects: ProjectRef[] }) => ({
-      name: STATUS_LABELS[d.status as keyof typeof STATUS_LABELS] ?? d.status,
+      name: sl[d.status as keyof typeof sl] ?? STATUS_LABELS[d.status as keyof typeof STATUS_LABELS] ?? d.status,
       value: d.count,
       status: d.status,
       projects: d.projects,
@@ -254,10 +207,10 @@ export default function DashboardPage() {
     }),
   );
 
-  const hinanhyoByProject: {
-    code: string; name: string;
-    DITERIMA: number; DITOLAK: number; PENDING: number; total: number;
-  }[] = charts.hinanhyoByProject ?? [];
+  const scheduleByProject: {
+    projectId: string; assNumber: string; assName: string;
+    revisions: { id: string; revisionDate: string; rfqDate: string | null; dieGoDate: string | null; pp1Date: string | null; pp2Date: string | null; pp3Date: string | null; mpDate: string | null; notes: string | null }[];
+  }[] = charts.scheduleByProject ?? [];
 
   return (
     <div className="p-4 md:p-6 space-y-5">
@@ -265,7 +218,7 @@ export default function DashboardPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Real-time project monitoring</p>
+          <p className="text-sm text-gray-500 mt-0.5">{db.subtitle}</p>
         </div>
         <ClockDisplay />
       </div>
@@ -273,13 +226,13 @@ export default function DashboardPage() {
       {/* Filter bar */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm px-4 py-3">
         <div className="flex flex-wrap items-center gap-3">
-          <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider shrink-0">Filter Chart</span>
+          <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider shrink-0">{db.filterChart}</span>
           <select
             value={filterProjectId}
             onChange={(e) => { setFilterProjectId(e.target.value); setMonitorPage(1); }}
             className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-700 min-w-40"
           >
-            <option value="">All Projects</option>
+            <option value="">{t.allProjects}</option>
             {filterOptions.projects.map((p: { id: string; code: string; name: string }) => (
               <option key={p.id} value={p.id}>{p.code} - {p.name}</option>
             ))}
@@ -289,7 +242,7 @@ export default function DashboardPage() {
             onChange={(e) => { setFilterLeaderId(e.target.value); setMonitorPage(1); }}
             className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-700 min-w-36"
           >
-            <option value="">All Leaders</option>
+            <option value="">{db.allLeaders}</option>
             {filterOptions.leaders.map((p: { id: string; name: string }) => (
               <option key={p.id} value={p.id}>{p.name}</option>
             ))}
@@ -299,7 +252,7 @@ export default function DashboardPage() {
             onChange={(e) => { setFilterCustomer(e.target.value); setMonitorPage(1); }}
             className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-700 min-w-36"
           >
-            <option value="">All Customers</option>
+            <option value="">{db.allCustomers}</option>
             {filterOptions.customers.map((c: string) => (
               <option key={c} value={c}>{c}</option>
             ))}
@@ -310,12 +263,12 @@ export default function DashboardPage() {
               className="flex items-center gap-1 px-3 py-1.5 text-sm text-gray-500 hover:text-gray-800 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
             >
               <X className="w-3.5 h-3.5" />
-              Reset
+              {t.reset}
             </button>
           )}
           {hasFilter && (
             <span className="text-xs text-blue-600 font-medium bg-blue-50 px-2 py-1 rounded-full">
-              Filter active - {taskMonitoring.length} project(s)
+              {db.filterActive} - {taskMonitoring.length} project(s)
             </span>
           )}
         </div>
@@ -341,11 +294,11 @@ export default function DashboardPage() {
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
           <h2 className="text-sm font-semibold text-gray-900 mb-1 flex items-center gap-2">
             <BarChart3 className="w-4 h-4 text-blue-600" />
-            Project Status Distribution
+            {db.chartStatusTitle}
           </h2>
-          <p className="text-xs text-gray-400 mb-3">Hover to view project list</p>
+          <p className="text-xs text-gray-400 mb-3">{db.chartHover}</p>
           {statusChartData.every((d: { value: number }) => d.value === 0) ? (
-            <div className="h-48 flex items-center justify-center text-gray-400 text-sm">No data</div>
+            <div className="h-48 flex items-center justify-center text-gray-400 text-sm">{db.noData}</div>
           ) : (
             <>
               <ResponsiveContainer width="100%" height={200}>
@@ -384,9 +337,9 @@ export default function DashboardPage() {
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
           <h2 className="text-sm font-semibold text-gray-900 mb-1 flex items-center gap-2">
             <TrendingUp className="w-4 h-4 text-blue-600" />
-            Projects per Phase
+            {db.chartPhaseTitle}
           </h2>
-          <p className="text-xs text-gray-400 mb-3">Hover to view project list</p>
+          <p className="text-xs text-gray-400 mb-3">{db.chartHover}</p>
           <ResponsiveContainer width="100%" height={200}>
             <BarChart data={phaseChartData} margin={{ top: 20, right: 8, left: -20, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} />
@@ -413,51 +366,8 @@ export default function DashboardPage() {
           </ResponsiveContainer>
         </div>
 
-        {/* Chart 3: Hinanhyo & DR - vertical stacked bar per project */}
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
-          <h2 className="text-sm font-semibold text-gray-900 mb-1 flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 text-orange-500" />
-            Hinanhyo &amp; DR Status
-          </h2>
-          <p className="text-xs text-gray-400 mb-3">Hover for project details</p>
-          {hinanhyoByProject.length === 0 ? (
-            <div className="h-48 flex items-center justify-center text-gray-400 text-sm">No Hinanhyo/DR data</div>
-          ) : (
-            <>
-              <ResponsiveContainer width="100%" height={200}>
-                <BarChart data={hinanhyoByProject} margin={{ top: 20, right: 8, left: -20, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                  <XAxis dataKey="code" fontSize={10} tick={{ fill: "#6b7280" }} />
-                  <YAxis allowDecimals={false} fontSize={11} tick={{ fill: "#6b7280" }} />
-                  <Tooltip content={<HinanhyoTooltip />} />
-                  <Bar dataKey="DITERIMA" name="Accepted" stackId="a" fill="#22c55e" isAnimationActive={false} />
-                  <Bar dataKey="DITOLAK" name="Rejected" stackId="a" fill="#ef4444" isAnimationActive={false} />
-                  <Bar
-                    dataKey="PENDING"
-                    name="Pending"
-                    stackId="a"
-                    fill="#f59e0b"
-                    radius={[4, 4, 0, 0]}
-                    isAnimationActive={false}
-                    label={<HinanhyoTotalLabel />}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
-              <div className="flex gap-3 mt-2 justify-center">
-                {[
-                  { label: "Accepted", color: "#22c55e" },
-                  { label: "Rejected", color: "#ef4444" },
-                  { label: "Pending", color: "#f59e0b" },
-                ].map((l) => (
-                  <span key={l.label} className="flex items-center gap-1 text-xs text-gray-600">
-                    <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: l.color }} />
-                    {l.label}
-                  </span>
-                ))}
-              </div>
-            </>
-          )}
-        </div>
+        {/* Chart 3: Schedule Customer */}
+        <ScheduleCustomerChart scheduleByProject={hasFilter ? scheduleByProject : scheduleByProject.slice(0, 4)} />
       </div>
 
       {/* Charts Row 2: MP + Cycle Time */}
@@ -466,21 +376,21 @@ export default function DashboardPage() {
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
           <h2 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2">
             <Users className="w-4 h-4 text-blue-600" />
-            Manpower: Required vs Actual
+            {db.mpTitle}
           </h2>
           {(charts.mpChart ?? []).length === 0 ? (
-            <div className="h-40 flex items-center justify-center text-gray-400 text-sm">No manpower data</div>
+            <div className="h-40 flex items-center justify-center text-gray-400 text-sm">{db.noMpData}</div>
           ) : (
             <div className="overflow-x-auto">
-              <BarChart width={Math.max(500, (charts.mpChart ?? []).length * 70)} height={220} data={charts.mpChart ?? []} margin={{ top: 20, left: -10, right: 8, bottom: 0 }}>
+              <BarChart width={Math.max(500, (charts.mpChart ?? []).length * 70)} height={360} data={charts.mpChart ?? []} margin={{ top: 20, left: -10, right: 8, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} />
                 <XAxis dataKey="code" fontSize={11} />
                 <YAxis fontSize={11} />
                 <Tooltip />
                 <Legend fontSize={11} />
-                <Bar dataKey="kebutuhan" name="Required" fill="#93c5fd" radius={[4, 4, 0, 0]} isAnimationActive={false}
+                <Bar dataKey="kebutuhan" name={db.mpRequired} fill="#93c5fd" radius={[4, 4, 0, 0]} isAnimationActive={false}
                   label={{ position: "top", fontSize: 10, fontWeight: "bold", fill: "#1e40af" }} />
-                <Bar dataKey="aktual" name="Actual" fill="#3b82f6" radius={[4, 4, 0, 0]} isAnimationActive={false}
+                <Bar dataKey="aktual" name={db.mpActual} fill="#3b82f6" radius={[4, 4, 0, 0]} isAnimationActive={false}
                   label={{ position: "top", fontSize: 10, fontWeight: "bold", fill: "#1d4ed8" }} />
               </BarChart>
             </div>
@@ -489,7 +399,61 @@ export default function DashboardPage() {
 
         {/* Cycle Time */}
         <div className="min-w-0">
-          <CycleTimeChart projects={charts.ctProjects ?? []} height={300} />
+          {(() => {
+            type CtProject = Parameters<typeof CycleTimeChart>[0]["projects"][0];
+            const ctProjects = (charts.ctProjects ?? []) as CtProject[];
+            const withData = ctProjects.filter(
+              (p) => Array.isArray(p.aktualCt) && (p.aktualCt as { value: number | null }[]).some((g) => g.value !== null)
+            );
+            // Default: show 5 most recent projects with CT data (or all if fewer than 5)
+            const defaultProjects = withData.length > 0 ? withData.slice(0, 5) : ctProjects.slice(0, 5);
+            const displayProjects = ctSelectedId
+              ? ctProjects.filter((p) => p.id === ctSelectedId)
+              : defaultProjects;
+
+            return (
+              <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5 space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <h2 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
+                      <BarChart3 className="w-4 h-4 text-blue-600" />
+                      {db.ctTitle}
+                    </h2>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      {ctSelectedId ? db.ctFiltered : db.ctRecent}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={ctSelectedId}
+                      onChange={(e) => setCtSelectedId(e.target.value)}
+                      className="border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-700 max-w-52"
+                    >
+                      <option value="">{db.ctLatest}</option>
+                      {ctProjects.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.assNumber} - {p.assName}
+                        </option>
+                      ))}
+                    </select>
+                    {ctSelectedId && (
+                      <button
+                        onClick={() => setCtSelectedId("")}
+                        className="text-xs text-gray-400 hover:text-gray-700 border border-gray-200 rounded-lg px-2 py-1.5 hover:bg-gray-50 transition-colors whitespace-nowrap"
+                      >
+                        Reset
+                      </button>
+                    )}
+                  </div>
+                </div>
+                {displayProjects.length > 0 ? (
+                  <CycleTimeChart projects={displayProjects} height={260} />
+                ) : (
+                  <div className="h-64 flex items-center justify-center text-gray-400 text-sm">{db.noCTData}</div>
+                )}
+              </div>
+            );
+          })()}
         </div>
       </div>
 
@@ -505,7 +469,7 @@ export default function DashboardPage() {
             <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Calendar className="w-4 h-4 text-blue-600" />
-                <h2 className="text-sm font-semibold text-gray-900">Task Monitoring</h2>
+                <h2 className="text-sm font-semibold text-gray-900">{db.taskMonTitle}</h2>
                 <span className="text-xs text-gray-400">({taskMonitoring.length} project(s))</span>
               </div>
             </div>
@@ -513,7 +477,7 @@ export default function DashboardPage() {
               <table className="w-full text-sm">
                 <thead className="bg-gray-50">
                   <tr>
-                    {["Assy No.", "Assy Name", "Project Leader", "Customer", "Target Date", "Days Remaining", "Status", "Progress"].map((h) => (
+                    {[db.colAssyNo, db.colAssyName, db.colLeader, db.colCustomer, db.colTargetDate, db.colDaysRemaining, t.status, db.colProgress].map((h) => (
                       <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">
                         {h}
                       </th>
@@ -536,11 +500,11 @@ export default function DashboardPage() {
                           <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{row.customer}</td>
                           <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{formatDate(row.targetDate ?? row.code)}</td>
                           <td className={`px-4 py-3 font-semibold whitespace-nowrap ${isLate ? "text-red-600" : isNear ? "text-yellow-600" : "text-gray-600"}`}>
-                            {isLate ? `Overdue by ${-row.daysRemaining} day(s)` : row.daysRemaining === 0 ? "Due today" : `${row.daysRemaining} day(s) left`}
+                            {isLate ? `${db.overdueBy} ${-row.daysRemaining} ${db.daysSuffix}` : row.daysRemaining === 0 ? db.dueToday : `${row.daysRemaining} ${db.daysLeft}`}
                           </td>
                           <td className="px-4 py-3">
                             <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium border ${getStatusColor(row.status)}`}>
-                              {STATUS_LABELS[row.status as keyof typeof STATUS_LABELS] ?? row.status}
+                              {sl[row.status as keyof typeof sl] ?? STATUS_LABELS[row.status as keyof typeof STATUS_LABELS] ?? row.status}
                             </span>
                           </td>
                           <td className="px-4 py-3">
@@ -558,7 +522,7 @@ export default function DashboardPage() {
                 </tbody>
               </table>
               {taskMonitoring.length === 0 && (
-                <div className="py-12 text-center text-gray-400 text-sm">No project data</div>
+                <div className="py-12 text-center text-gray-400 text-sm">{db.noProjectData}</div>
               )}
             </div>
             {totalMonitorPages > 1 && (
