@@ -35,6 +35,7 @@ export function CreateProjectModal({ onClose, onCreate }: Props) {
     description: "",
     projectLeaderId: "",
     priority: "MEDIUM",
+    status: "BELUM_MULAI",
     startDate: "",
     targetDate: "",
     kebutuhanMp: "",
@@ -188,6 +189,18 @@ export function CreateProjectModal({ onClose, onCreate }: Props) {
                 <option value="HIGH">High</option>
                 <option value="MEDIUM">Medium</option>
                 <option value="LOW">Low</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">Status</label>
+              <select
+                value={form.status}
+                onChange={(e) => setForm({ ...form, status: e.target.value })}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="BELUM_MULAI">Not Started</option>
+                <option value="DALAM_PROSES">In Progress</option>
               </select>
             </div>
 
